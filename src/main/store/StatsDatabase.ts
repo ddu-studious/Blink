@@ -1,0 +1,185 @@
+// ========================================
+// 统计数据库模块 - 基于 better-sqlite3
+// ========================================
+
+import Database from 'better-sqlite3'
+import { app } from 'electron'
+import { join } from 'path'
+import { BreakType, BreakRecordStatus } from '../types'
+import log from 'electron-log'
+import dayjs from 'dayjs'
+
+export interface BreakRecord {
+  id?: number
+  breakType: BreakType
+  startedAt: string
+  endedAt?: string
+  plannedDuration: number
+  actualDuration?: number
+  status: BreakRecordStatus
+  createdDate: string
+}
+
+export interface DailyStats {
+  date: string
+  miniBreaksCompleted: number
+  miniBreaksSkipped: number
+  longBreaksCompleted: number
+  longBreaksSkipped: number
+  totalRestSeconds: number
+}
+
+class StatsDatabase {
+  private db: Database.Database | null = null
+
+  /** 初始化数据库 */
+  init(): void {
+    const dbPath = join(app.getPath('userData'), 'stats.db')
+    this.db = new Database(dbPath)
+
+    // 启用 WAL 模式提升性能
+    this.db.pragma('journal_mode = WAL')
+
+    this.createTables()
+    log.info('[StatsDatabase] 初始化完成，数据库路径:', dbPath)
+  }
+
+  /** 创建表 */
+  private createTables(): void {
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS break_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        break_type TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        planned_duration INTEGER NOT NULL,
+        actual_duration INTEGER,
+        status TEXT NOT NULL,
+        created_date TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_break_records_date ON break_records(created_date);
+
+      CREATE TABLE IF NOT EXISTS daily_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT UNIQUE NOT NULL,
+        mini_breaks_completed INTEGER DEFAULT 0,
+        mini_breaks_skipped INTEGER DEFAULT 0,
+        long_breaks_completed INTEGER DEFAULT 0,
+        long_breaks_skipped INTEGER DEFAULT 0,
+        total_rest_seconds INTEGER DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date);
+    `)
+  }
+
+  /** 记录一次休息 */
+  addBreakRecord(record: BreakRecord): number {
+    const stmt = this.db!.prepare(`
+      INSERT INTO break_records (break_type, started_at, ended_at, planned_duration, actual_duration, status, created_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(
+      record.breakType,
+      record.startedAt,
+      record.endedAt || null,
+      record.plannedDuration,
+      record.actualDuration || null,
+      record.status,
+      record.createdDate
+    )
+
+    // 同步更新每日统计
+    this.updateDailyStats(record)
+
+    return result.lastInsertRowid as number
+  }
+
+  /** 更新每日统计 */
+  private updateDailyStats(record: BreakRecord): void {
+    const date = record.createdDate
+    const isMini = record.breakType === 'mini'
+    const isCompleted = record.status === 'completed'
+    const isSkipped = record.status === 'skipped'
+
+    // 使用 UPSERT
+    this.db!.prepare(`
+      INSERT INTO daily_stats (date, mini_breaks_completed, mini_breaks_skipped, long_breaks_completed, long_breaks_skipped, total_rest_seconds)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date) DO UPDATE SET
+        mini_breaks_completed = mini_breaks_completed + ?,
+        mini_breaks_skipped = mini_breaks_skipped + ?,
+        long_breaks_completed = long_breaks_completed + ?,
+        long_breaks_skipped = long_breaks_skipped + ?,
+        total_rest_seconds = total_rest_seconds + ?
+    `).run(
+      date,
+      isMini && isCompleted ? 1 : 0,
+      isMini && isSkipped ? 1 : 0,
+      !isMini && isCompleted ? 1 : 0,
+      !isMini && isSkipped ? 1 : 0,
+      isCompleted ? (record.actualDuration || 0) : 0,
+      // UPDATE 部分的参数
+      isMini && isCompleted ? 1 : 0,
+      isMini && isSkipped ? 1 : 0,
+      !isMini && isCompleted ? 1 : 0,
+      !isMini && isSkipped ? 1 : 0,
+      isCompleted ? (record.actualDuration || 0) : 0
+    )
+  }
+
+  /** 获取今日统计 */
+  getTodayStats(): DailyStats {
+    const today = dayjs().format('YYYY-MM-DD')
+    const row = this.db!.prepare(
+      'SELECT * FROM daily_stats WHERE date = ?'
+    ).get(today) as Record<string, unknown> | undefined
+
+    if (!row) {
+      return {
+        date: today,
+        miniBreaksCompleted: 0,
+        miniBreaksSkipped: 0,
+        longBreaksCompleted: 0,
+        longBreaksSkipped: 0,
+        totalRestSeconds: 0
+      }
+    }
+
+    return {
+      date: row.date as string,
+      miniBreaksCompleted: row.mini_breaks_completed as number,
+      miniBreaksSkipped: row.mini_breaks_skipped as number,
+      longBreaksCompleted: row.long_breaks_completed as number,
+      longBreaksSkipped: row.long_breaks_skipped as number,
+      totalRestSeconds: row.total_rest_seconds as number
+    }
+  }
+
+  /** 获取日期范围内的统计 */
+  getStatsRange(startDate: string, endDate: string): DailyStats[] {
+    const rows = this.db!.prepare(
+      'SELECT * FROM daily_stats WHERE date >= ? AND date <= ? ORDER BY date ASC'
+    ).all(startDate, endDate) as Record<string, unknown>[]
+
+    return rows.map((row) => ({
+      date: row.date as string,
+      miniBreaksCompleted: row.mini_breaks_completed as number,
+      miniBreaksSkipped: row.mini_breaks_skipped as number,
+      longBreaksCompleted: row.long_breaks_completed as number,
+      longBreaksSkipped: row.long_breaks_skipped as number,
+      totalRestSeconds: row.total_rest_seconds as number
+    }))
+  }
+
+  /** 关闭数据库 */
+  close(): void {
+    if (this.db) {
+      this.db.close()
+      log.info('[StatsDatabase] 数据库已关闭')
+    }
+  }
+}
+
+export const statsDatabase = new StatsDatabase()
