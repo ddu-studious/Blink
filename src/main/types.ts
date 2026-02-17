@@ -20,12 +20,25 @@ export type NotificationMode = 'overlay' | 'notification' | 'both'
 /** 语言 */
 export type Language = 'zh-CN' | 'en-US'
 
+/** 休息屏幕模式 */
+export type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen'
+
+/** 环境音效类型 */
+export type AmbientSoundType = 'birds' | 'stream' | 'waves' | 'wind' | 'rain'
+
 // ---- 设置数据结构 ----
+
+export interface ShortcutSettings {
+  togglePause: string // 暂停/恢复快捷键
+  takeBreak: string // 立即休息快捷键
+  skipBreak: string // 跳过休息快捷键
+}
 
 export interface GeneralSettings {
   autoLaunch: boolean
   language: Language
   theme: ThemeMode
+  globalShortcuts: ShortcutSettings
 }
 
 export interface MiniBreakSettings {
@@ -40,6 +53,14 @@ export interface LongBreakSettings {
   duration: number // 秒 (60-900, 默认 300)
 }
 
+/** 休息屏幕设置 */
+export interface RestScreenSettings {
+  miniBreakMode: RestScreenMode // 短休息使用的模式 (默认 classic)
+  longBreakMode: RestScreenMode // 长休息使用的模式 (默认 nature)
+  ambientSoundEnabled: boolean // 环境音效开关
+  ambientSoundType: AmbientSoundType // 音效类型
+}
+
 export interface ReminderSettings {
   miniBreak: MiniBreakSettings
   longBreak: LongBreakSettings
@@ -47,6 +68,14 @@ export interface ReminderSettings {
   soundEnabled: boolean
   soundVolume: number // 0-100
   skipButtonDelay: number // 秒 (0-30, 默认 5)
+  restScreen: RestScreenSettings // 休息屏幕设置
+}
+
+export interface WorkSchedule {
+  enabled: boolean
+  startTime: string // "09:00"
+  endTime: string // "18:00"
+  daysOfWeek: number[] // [1,2,3,4,5] = 周一到周五
 }
 
 export interface SmartSettings {
@@ -55,6 +84,7 @@ export interface SmartSettings {
   dndAware: boolean
   fullscreenDetection: boolean
   strictMode: boolean
+  workSchedule: WorkSchedule
 }
 
 export interface AppSettings {
@@ -109,10 +139,17 @@ export const IPC_CHANNELS = {
   // 统计
   STATS_GET_TODAY: 'stats:get-today',
   STATS_GET_RANGE: 'stats:get-range',
+  STATS_GET_STREAK: 'stats:get-streak',
 
   // 应用
   APP_QUIT: 'app:quit',
-  APP_GET_VERSION: 'app:get-version'
+  APP_GET_VERSION: 'app:get-version',
+
+  // 防作弊: 活动检测重置
+  BREAK_ACTIVITY_DETECTED: 'break:activity-detected',
+
+  // 设置变更通知
+  SETTINGS_CHANGED: 'settings:changed'
 } as const
 
 // ---- 默认设置 ----
@@ -121,7 +158,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   general: {
     autoLaunch: false,
     language: 'zh-CN',
-    theme: 'system'
+    theme: 'system',
+    globalShortcuts: {
+      togglePause: 'CommandOrControl+Shift+P',
+      takeBreak: 'CommandOrControl+Shift+B',
+      skipBreak: 'CommandOrControl+Shift+S'
+    }
   },
   reminder: {
     miniBreak: {
@@ -137,14 +179,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
     notificationMode: 'overlay',
     soundEnabled: true,
     soundVolume: 50,
-    skipButtonDelay: 5
+    skipButtonDelay: 5,
+    restScreen: {
+      miniBreakMode: 'classic',
+      longBreakMode: 'nature',
+      ambientSoundEnabled: true,
+      ambientSoundType: 'birds'
+    }
   },
   smart: {
     idleDetectionEnabled: true,
     idleThreshold: 5,
     dndAware: true,
     fullscreenDetection: true,
-    strictMode: false
+    strictMode: false,
+    workSchedule: {
+      enabled: false,
+      startTime: '09:00',
+      endTime: '18:00',
+      daysOfWeek: [1, 2, 3, 4, 5]
+    }
   },
   firstRun: true
 }

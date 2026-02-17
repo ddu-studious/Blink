@@ -27,6 +27,10 @@ export class TimerManager extends EventEmitter {
   private todayLongBreaks = 0
   private todaySkipped = 0
 
+  // 预告通知状态
+  private miniBreakWarned = false
+  private longBreakWarned = false
+
   constructor() {
     super()
     this.loadTodayStats()
@@ -54,6 +58,8 @@ export class TimerManager extends EventEmitter {
     const settings = this.getSettings()
     this.miniBreakCountdown = settings.reminder.miniBreak.interval * 60
     this.longBreakCountdown = settings.reminder.longBreak.interval * 60
+    this.miniBreakWarned = false
+    this.longBreakWarned = false
   }
 
   /** 启动计时器 */
@@ -109,14 +115,50 @@ export class TimerManager extends EventEmitter {
     }
   }
 
+  /** 检查当前是否在工作时段内 */
+  private isInWorkSchedule(): boolean {
+    const settings = this.getSettings()
+    const schedule = settings.smart.workSchedule
+    if (!schedule || !schedule.enabled) return true // 未启用则始终工作
+
+    const now = dayjs()
+    const currentDay = now.day() // 0=周日, 1=周一...
+    if (!schedule.daysOfWeek.includes(currentDay)) return false
+
+    const [startH, startM] = schedule.startTime.split(':').map(Number)
+    const [endH, endM] = schedule.endTime.split(':').map(Number)
+    const startMinutes = startH * 60 + startM
+    const endMinutes = endH * 60 + endM
+    const currentMinutes = now.hour() * 60 + now.minute()
+
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes
+  }
+
   /** 工作时间心跳 */
   private tickWork(): void {
     const settings = this.getSettings()
 
+    // 检查工作时段
+    if (!this.isInWorkSchedule()) {
+      if (this.status === 'running') {
+        this.pause()
+        log.info('[TimerManager] 非工作时段，自动暂停')
+      }
+      return
+    }
+
     // Mini Break 倒计时
     if (settings.reminder.miniBreak.enabled) {
       this.miniBreakCountdown--
+
+      // 30 秒预告通知
+      if (this.miniBreakCountdown === 30 && !this.miniBreakWarned) {
+        this.miniBreakWarned = true
+        this.emit('break-warning', { type: 'mini' })
+      }
+
       if (this.miniBreakCountdown <= 0) {
+        this.miniBreakWarned = false
         this.startBreak('mini')
         return
       }
@@ -125,7 +167,15 @@ export class TimerManager extends EventEmitter {
     // Long Break 倒计时
     if (settings.reminder.longBreak.enabled) {
       this.longBreakCountdown--
+
+      // 30 秒预告通知
+      if (this.longBreakCountdown === 30 && !this.longBreakWarned) {
+        this.longBreakWarned = true
+        this.emit('break-warning', { type: 'long' })
+      }
+
       if (this.longBreakCountdown <= 0) {
+        this.longBreakWarned = false
         this.startBreak('long')
         return
       }
@@ -263,6 +313,23 @@ export class TimerManager extends EventEmitter {
   takeBreakNow(type: BreakType = 'mini'): void {
     if (this.status === 'break') return
     this.startBreak(type)
+  }
+
+  /** 防作弊: 检测到活动时重置休息倒计时 */
+  resetBreakCountdown(): void {
+    if (this.status !== 'break' || !this.currentBreakType) return
+
+    const settings = this.getSettings()
+    if (!settings.smart.strictMode) return
+
+    const duration =
+      this.currentBreakType === 'mini'
+        ? settings.reminder.miniBreak.duration
+        : settings.reminder.longBreak.duration
+
+    this.breakCountdown = duration
+    log.info(`[TimerManager] 严格模式: 检测到活动，重置休息倒计时至 ${duration} 秒`)
+    this.emitState()
   }
 
   /** 处理系统挂起 (休眠/锁屏) */

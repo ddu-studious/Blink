@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a7a4c"/>
+      <stop offset="50%" stop-color="#15825a"/>
+      <stop offset="100%" stop-color="#0d6b48"/>
+    </linearGradient>
+    <!-- 叶子渐变 -->
+    <linearGradient id="leaf1" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#7dd3a0"/>
+      <stop offset="100%" stop-color="#3db876"/>
+    </linearGradient>
+    <linearGradient id="leaf2" x1="0.3" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#a8e6c4"/>
+      <stop offset="100%" stop-color="#5ec89a"/>
+    </linearGradient>
+    <linearGradient id="leaf3" x1="0.2" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#5ec89a"/>
+      <stop offset="100%" stop-color="#2da06a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角方形背景 -->
+  <rect width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
+
+  <!-- 微妙内阴影 -->
+  <rect width="1024" height="1024" rx="228" ry="228" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+
+  <!-- 茎/主干 -->
+  <path d="M 512 750 Q 510 600 500 480 Q 490 380 520 300" fill="none" stroke="#2da06a" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- 左下叶子 (大) -->
+  <path d="M 500 560 Q 380 510 330 420 Q 310 370 350 330 Q 400 310 440 340 Q 490 400 500 560 Z" fill="url(#leaf1)" opacity="0.95"/>
+  <!-- 左叶脉 -->
+  <path d="M 495 550 Q 420 490 370 380" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- 右叶子 (中) -->
+  <path d="M 510 480 Q 600 400 660 350 Q 700 330 710 370 Q 700 430 640 480 Q 570 530 510 480 Z" fill="url(#leaf2)" opacity="0.9"/>
+  <!-- 右叶脉 -->
+  <path d="M 515 478 Q 600 420 670 365" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- 顶部叶子 (小) -->
+  <path d="M 518 330 Q 490 250 510 200 Q 530 170 555 195 Q 570 240 540 310 Q 530 330 518 330 Z" fill="url(#leaf3)" opacity="0.85"/>
+
+  <!-- 小嫩芽 (右上) -->
+  <path d="M 525 360 Q 560 310 590 290 Q 605 285 605 300 Q 595 330 555 360 Q 540 370 525 360 Z" fill="#7dd3a0" opacity="0.75"/>
+
+  <!-- 微光效果 -->
+  <circle cx="380" cy="330" r="3" fill="rgba(255,255,255,0.3)"/>
+  <circle cx="650" cy="350" r="2" fill="rgba(255,255,255,0.25)"/>
+</svg>

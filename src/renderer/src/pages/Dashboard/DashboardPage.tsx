@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 interface TodayStats {
   date: string
@@ -18,9 +18,14 @@ interface TimerState {
   todaySkipped: number
 }
 
+type TabView = 'today' | 'week'
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<TodayStats | null>(null)
   const [timerState, setTimerState] = useState<TimerState | null>(null)
+  const [weekStats, setWeekStats] = useState<TodayStats[]>([])
+  const [streak, setStreak] = useState(0)
+  const [activeTab, setActiveTab] = useState<TabView>('today')
 
   useEffect(() => {
     // 加载今日统计
@@ -28,6 +33,16 @@ export default function DashboardPage() {
 
     // 获取计时器状态
     window.api.timer.getState().then(setTimerState)
+
+    // 获取连续天数
+    window.api.stats.getStreak().then(setStreak)
+
+    // 获取最近 7 天数据
+    const today = new Date()
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 6)
+    const formatDate = (d: Date) => d.toISOString().split('T')[0]
+    window.api.stats.getRange(formatDate(weekAgo), formatDate(today)).then(setWeekStats)
 
     // 监听状态更新
     const cleanup = window.api.timer.onStateUpdate((state) => {
@@ -65,8 +80,96 @@ export default function DashboardPage() {
 
   return (
     <div className="h-full bg-gray-50 dark:bg-gray-900 p-6 overflow-y-auto">
-      <h1 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">📊 今日统计</h1>
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-semibold text-gray-800 dark:text-white">📊 统计</h1>
+        <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5">
+          <button
+            onClick={() => setActiveTab('today')}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              activeTab === 'today'
+                ? 'bg-white dark:bg-gray-600 text-gray-800 dark:text-white shadow-sm font-medium'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            今日
+          </button>
+          <button
+            onClick={() => setActiveTab('week')}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              activeTab === 'week'
+                ? 'bg-white dark:bg-gray-600 text-gray-800 dark:text-white shadow-sm font-medium'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            本周
+          </button>
+        </div>
+      </div>
 
+      {activeTab === 'today' ? (
+        <TodayView
+          stats={stats}
+          timerState={timerState}
+          streak={streak}
+          formatMinutes={formatMinutes}
+          statusLabel={statusLabel}
+          statusColor={statusColor}
+        />
+      ) : (
+        <WeekView weekStats={weekStats} streak={streak} />
+      )}
+
+      {/* 操作按钮 */}
+      <div className="mt-6 flex gap-3">
+        <button
+          onClick={() => {
+            if (timerState?.status === 'idle') {
+              window.api.timer.start()
+            } else if (timerState?.status === 'paused') {
+              window.api.timer.resume()
+            } else if (timerState?.status === 'running') {
+              window.api.timer.pause()
+            }
+          }}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-primary-500 hover:bg-primary-600 text-white transition-colors"
+        >
+          {timerState?.status === 'running'
+            ? '暂停护眼'
+            : timerState?.status === 'paused'
+              ? '恢复护眼'
+              : '开始护眼'}
+        </button>
+        <button
+          onClick={() => window.api.timer.takeBreak('mini')}
+          disabled={timerState?.status !== 'running'}
+          className="px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30"
+        >
+          立即休息
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---- 今日视图 ----
+function TodayView({
+  stats,
+  timerState,
+  streak,
+  formatMinutes,
+  statusLabel,
+  statusColor
+}: {
+  stats: TodayStats | null
+  timerState: TimerState | null
+  streak: number
+  formatMinutes: (s: number) => string
+  statusLabel: (s: string) => string
+  statusColor: (s: string) => string
+}) {
+  return (
+    <>
       {/* 当前状态 */}
       {timerState && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
@@ -89,8 +192,21 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 统计卡片网格 */}
+      {/* 连续天数 + 统计卡片 */}
       <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* 连续坚持 */}
+        <div className="col-span-2 bg-gradient-to-r from-primary-500 to-eye-500 rounded-xl p-4 shadow-sm text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-white/70">连续坚持</p>
+              <p className="text-3xl font-bold tabular-nums mt-1">
+                {streak} <span className="text-lg font-normal text-white/80">天</span>
+              </p>
+            </div>
+            <div className="text-4xl opacity-30">🔥</div>
+          </div>
+        </div>
+
         <StatCard
           label="短休息完成"
           value={stats?.miniBreaksCompleted || 0}
@@ -126,38 +242,122 @@ export default function DashboardPage() {
           <CompletionBar stats={stats} />
         </div>
       )}
-
-      {/* 操作按钮 */}
-      <div className="mt-6 flex gap-3">
-        <button
-          onClick={() => {
-            if (timerState?.status === 'idle') {
-              window.api.timer.start()
-            } else if (timerState?.status === 'paused') {
-              window.api.timer.resume()
-            } else if (timerState?.status === 'running') {
-              window.api.timer.pause()
-            }
-          }}
-          className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-primary-500 hover:bg-primary-600 text-white transition-colors"
-        >
-          {timerState?.status === 'running'
-            ? '暂停护眼'
-            : timerState?.status === 'paused'
-              ? '恢复护眼'
-              : '开始护眼'}
-        </button>
-        <button
-          onClick={() => window.api.timer.takeBreak('mini')}
-          disabled={timerState?.status !== 'running'}
-          className="px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30"
-        >
-          立即休息
-        </button>
-      </div>
-    </div>
+    </>
   )
 }
+
+// ---- 本周视图 ----
+function WeekView({ weekStats, streak }: { weekStats: TodayStats[]; streak: number }) {
+  // 生成最近 7 天的日期标签
+  const days = useMemo(() => {
+    const result: { date: string; label: string; dayOfWeek: string }[] = []
+    const dayNames = ['日', '一', '二', '三', '四', '五', '六']
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      result.push({
+        date: dateStr,
+        label: `${d.getMonth() + 1}/${d.getDate()}`,
+        dayOfWeek: dayNames[d.getDay()]
+      })
+    }
+    return result
+  }, [])
+
+  // 将 weekStats 映射到 7 天
+  const chartData = useMemo(() => {
+    const statsMap = new Map(weekStats.map((s) => [s.date, s]))
+    return days.map((day) => {
+      const s = statsMap.get(day.date)
+      return {
+        ...day,
+        completed: s ? s.miniBreaksCompleted + s.longBreaksCompleted : 0,
+        skipped: s ? s.miniBreaksSkipped + s.longBreaksSkipped : 0,
+        restMinutes: s ? Math.round(s.totalRestSeconds / 60) : 0
+      }
+    })
+  }, [days, weekStats])
+
+  const maxCompleted = Math.max(...chartData.map((d) => d.completed), 1)
+  const totalCompleted = chartData.reduce((sum, d) => sum + d.completed, 0)
+  const totalSkipped = chartData.reduce((sum, d) => sum + d.skipped, 0)
+  const totalRestMinutes = chartData.reduce((sum, d) => sum + d.restMinutes, 0)
+
+  return (
+    <>
+      {/* 周概览卡片 */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+          <p className="text-xs text-gray-400">本周完成</p>
+          <p className="text-2xl font-semibold text-primary-500 tabular-nums mt-1">{totalCompleted}</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+          <p className="text-xs text-gray-400">本周跳过</p>
+          <p className="text-2xl font-semibold text-orange-500 tabular-nums mt-1">{totalSkipped}</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+          <p className="text-xs text-gray-400">总休息</p>
+          <p className="text-2xl font-semibold text-eye-500 tabular-nums mt-1">{totalRestMinutes}<span className="text-sm font-normal text-gray-400 ml-0.5">分</span></p>
+        </div>
+      </div>
+
+      {/* SVG 柱状图 */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-4">每日休息完成次数</h3>
+        <div className="flex items-end justify-between gap-2" style={{ height: '140px' }}>
+          {chartData.map((day, i) => {
+            const isToday = i === chartData.length - 1
+            const barHeight = maxCompleted > 0 ? (day.completed / maxCompleted) * 100 : 0
+            return (
+              <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                {/* 数值 */}
+                <span className={`text-xs tabular-nums ${day.completed > 0 ? 'text-gray-600 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                  {day.completed || ''}
+                </span>
+                {/* 柱状 */}
+                <div className="w-full flex items-end" style={{ height: '100px' }}>
+                  <div
+                    className={`w-full rounded-t-md transition-all duration-500 ${
+                      isToday
+                        ? 'bg-gradient-to-t from-primary-500 to-primary-400'
+                        : day.completed > 0
+                          ? 'bg-primary-200 dark:bg-primary-800'
+                          : 'bg-gray-100 dark:bg-gray-700'
+                    }`}
+                    style={{ height: `${Math.max(barHeight, 4)}%` }}
+                  />
+                </div>
+                {/* 日期标签 */}
+                <div className="text-center">
+                  <p className={`text-xs ${isToday ? 'text-primary-500 font-medium' : 'text-gray-400'}`}>
+                    {day.dayOfWeek}
+                  </p>
+                  <p className="text-[10px] text-gray-300 dark:text-gray-600">{day.label}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 连续坚持 */}
+      <div className="bg-gradient-to-r from-primary-500 to-eye-500 rounded-xl p-4 shadow-sm text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-white/70">连续坚持</p>
+            <p className="text-3xl font-bold tabular-nums mt-1">
+              {streak} <span className="text-lg font-normal text-white/80">天</span>
+            </p>
+          </div>
+          <div className="text-4xl opacity-30">🔥</div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ---- 通用组件 ----
 
 function StatCard({
   label,

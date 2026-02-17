@@ -3,10 +3,13 @@
 // ========================================
 
 import { ipcMain, BrowserWindow } from 'electron'
-import { IPC_CHANNELS } from '../types'
+import { IPC_CHANNELS, ThemeMode } from '../types'
 import { TimerManager } from '../timer/TimerManager'
 import { settingsStore } from '../store/SettingsStore'
 import { statsDatabase } from '../store/StatsDatabase'
+import { autoLaunchService } from '../services/AutoLaunchService'
+import { themeService } from '../services/ThemeService'
+import { shortcutService } from '../services/ShortcutService'
 import log from 'electron-log'
 
 /** 注册所有 IPC 处理器 */
@@ -50,14 +53,35 @@ export function registerIpcHandlers(timerManager: TimerManager): void {
     return timerManager.getState()
   })
 
+  ipcMain.handle(IPC_CHANNELS.BREAK_ACTIVITY_DETECTED, () => {
+    timerManager.resetBreakCountdown()
+    return timerManager.getState()
+  })
+
   // ---- 设置 ----
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, () => {
     return settingsStore.getAll()
   })
 
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, (_, settings) => {
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, async (_, settings) => {
     settingsStore.update(settings)
+
+    // 同步开机自启动设置
+    if (settings.general?.autoLaunch !== undefined) {
+      await autoLaunchService.setEnabled(settings.general.autoLaunch)
+    }
+
+    // 同步主题切换
+    if (settings.general?.theme !== undefined) {
+      themeService.applyTheme(settings.general.theme as ThemeMode)
+    }
+
+    // 同步全局快捷键
+    if (settings.general?.globalShortcuts !== undefined) {
+      shortcutService.applyShortcuts()
+    }
+
     return settingsStore.getAll()
   })
 
@@ -74,6 +98,10 @@ export function registerIpcHandlers(timerManager: TimerManager): void {
 
   ipcMain.handle(IPC_CHANNELS.STATS_GET_RANGE, (_, { startDate, endDate }) => {
     return statsDatabase.getStatsRange(startDate, endDate)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STATS_GET_STREAK, () => {
+    return statsDatabase.getStreak()
   })
 
   log.info('[IPC] 所有 IPC 处理器已注册')

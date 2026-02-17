@@ -15,7 +15,32 @@ class SettingsStore {
       defaults: DEFAULT_SETTINGS
     })
 
+    // 数据迁移：确保新增字段存在
+    this.migrate()
+
     log.info('[SettingsStore] 初始化完成，配置文件路径:', this.store.path)
+  }
+
+  /** 数据迁移 - 为已有配置添加新增的默认字段 */
+  private migrate(): void {
+    const general = this.store.get('general')
+    // v1.0.0: 添加 globalShortcuts 字段
+    if (general && !general.globalShortcuts) {
+      this.store.set('general.globalShortcuts', DEFAULT_SETTINGS.general.globalShortcuts)
+      log.info('[SettingsStore] 迁移: 添加 globalShortcuts 默认值')
+    }
+    // v1.0.0: 添加 workSchedule 字段
+    const smart = this.store.get('smart')
+    if (smart && !smart.workSchedule) {
+      this.store.set('smart.workSchedule', DEFAULT_SETTINGS.smart.workSchedule)
+      log.info('[SettingsStore] 迁移: 添加 workSchedule 默认值')
+    }
+    // v1.1.0: 添加 restScreen 字段 (休息屏幕多模式)
+    const reminder = this.store.get('reminder')
+    if (reminder && !reminder.restScreen) {
+      this.store.set('reminder.restScreen', DEFAULT_SETTINGS.reminder.restScreen)
+      log.info('[SettingsStore] 迁移: 添加 restScreen 默认值')
+    }
   }
 
   /** 获取全部设置 */

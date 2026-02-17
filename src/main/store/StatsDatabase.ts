@@ -173,6 +173,38 @@ class StatsDatabase {
     }))
   }
 
+  /** 获取连续坚持天数 (从今天往前数连续有完成记录的天数) */
+  getStreak(): number {
+    const rows = this.db!.prepare(
+      `SELECT date, (mini_breaks_completed + long_breaks_completed) as completed
+       FROM daily_stats
+       WHERE completed > 0
+       ORDER BY date DESC
+       LIMIT 90`
+    ).all() as { date: string; completed: number }[]
+
+    if (rows.length === 0) return 0
+
+    let streak = 0
+    let checkDate = dayjs()
+
+    // 如果今天还没有记录，从昨天开始算
+    if (rows.length === 0 || rows[0].date !== checkDate.format('YYYY-MM-DD')) {
+      checkDate = checkDate.subtract(1, 'day')
+    }
+
+    for (const row of rows) {
+      if (row.date === checkDate.format('YYYY-MM-DD')) {
+        streak++
+        checkDate = checkDate.subtract(1, 'day')
+      } else {
+        break
+      }
+    }
+
+    return streak
+  }
+
   /** 关闭数据库 */
   close(): void {
     if (this.db) {

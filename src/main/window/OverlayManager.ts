@@ -69,7 +69,8 @@ export class OverlayManager {
   closeAll(): void {
     this.overlayWindows.forEach((win) => {
       if (!win.isDestroyed()) {
-        win.close()
+        // 使用 destroy() 替代 close()，因为 closable:false 会阻止 close()
+        win.destroy()
       }
     })
     this.overlayWindows = []

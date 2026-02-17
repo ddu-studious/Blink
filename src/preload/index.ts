@@ -27,7 +27,8 @@ const qingmouAPI = {
 
   // ---- 休息 ----
   break: {
-    skip: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_SKIP)
+    skip: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_SKIP),
+    activityDetected: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_ACTIVITY_DETECTED)
   },
 
   // ---- 设置 ----
@@ -41,7 +42,8 @@ const qingmouAPI = {
   stats: {
     getToday: () => ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_TODAY),
     getRange: (startDate: string, endDate: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_RANGE, { startDate, endDate })
+      ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_RANGE, { startDate, endDate }),
+    getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_STREAK)
   }
 }
 

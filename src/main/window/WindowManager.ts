@@ -2,10 +2,21 @@
 // 窗口管理器 - 设置/统计等普通窗口
 // ========================================
 
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, nativeImage } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import log from 'electron-log'
+
+/** 获取应用图标 (Linux/Windows 窗口需要) */
+function getAppIcon(): Electron.NativeImage | undefined {
+  try {
+    const iconPath = join(__dirname, '../../resources/icons/icon.png')
+    const icon = nativeImage.createFromPath(iconPath)
+    return icon.isEmpty() ? undefined : icon
+  } catch {
+    return undefined
+  }
+}
 
 export class WindowManager {
   private settingsWindow: BrowserWindow | null = null
@@ -19,9 +30,10 @@ export class WindowManager {
     }
 
     this.settingsWindow = new BrowserWindow({
-      width: 680,
-      height: 520,
+      width: 740,
+      height: 560,
       title: '青眸 - 设置',
+      icon: getAppIcon(),
       show: false,
       autoHideMenuBar: true,
       resizable: false,
@@ -62,6 +74,7 @@ export class WindowManager {
       width: 800,
       height: 600,
       title: '青眸 - 统计',
+      icon: getAppIcon(),
       show: false,
       autoHideMenuBar: true,
       webPreferences: {
