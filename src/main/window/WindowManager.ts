@@ -6,6 +6,7 @@ import { BrowserWindow, nativeImage } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import log from 'electron-log'
+import { themeService } from '../services/ThemeService'
 
 /** 获取应用图标 (Linux/Windows 窗口需要) */
 function getAppIcon(): Electron.NativeImage | undefined {
@@ -45,7 +46,12 @@ export class WindowManager {
     })
 
     this.settingsWindow.on('ready-to-show', () => {
+      themeService.syncThemeToWindow(this.settingsWindow!)
       this.settingsWindow!.show()
+    })
+
+    this.settingsWindow.webContents.on('did-finish-load', () => {
+      themeService.syncThemeToWindow(this.settingsWindow!)
     })
 
     this.settingsWindow.on('closed', () => {
@@ -85,7 +91,12 @@ export class WindowManager {
     })
 
     this.dashboardWindow.on('ready-to-show', () => {
+      themeService.syncThemeToWindow(this.dashboardWindow!)
       this.dashboardWindow!.show()
+    })
+
+    this.dashboardWindow.webContents.on('did-finish-load', () => {
+      themeService.syncThemeToWindow(this.dashboardWindow!)
     })
 
     this.dashboardWindow.on('closed', () => {

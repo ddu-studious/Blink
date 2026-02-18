@@ -56,19 +56,27 @@ class ThemeService {
   private broadcastTheme(): void {
     const isDark = this.isDark()
     BrowserWindow.getAllWindows().forEach((win) => {
-      if (!win.isDestroyed()) {
-        // 通过执行 JS 来切换渲染进程的 dark class
-        win.webContents.executeJavaScript(`
-          if (${isDark}) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        `).catch(() => {
-          // 窗口可能尚未加载完成
-        })
-      }
+      this.applyThemeToWindow(win, isDark)
     })
+  }
+
+  /** 对单个窗口应用主题 */
+  private applyThemeToWindow(win: BrowserWindow, isDark: boolean): void {
+    if (win.isDestroyed()) return
+    win.webContents.executeJavaScript(`
+      if (${isDark}) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    `).catch(() => {
+      // 窗口可能尚未加载完成
+    })
+  }
+
+  /** 对新创建的窗口同步当前主题（在 ready-to-show 或 did-finish-load 时调用） */
+  syncThemeToWindow(win: BrowserWindow): void {
+    this.applyThemeToWindow(win, this.isDark())
   }
 }
 

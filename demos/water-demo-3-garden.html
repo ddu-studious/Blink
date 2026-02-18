@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案C: 数字花园 - 喝水提醒 Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(180deg, #0a0f1e 0%, #0d1b2a 40%, #1b3a2a 100%);
+    color: #e2e8f0; min-height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+  }
+
+  .badge {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.25);
+    padding: 6px 16px; border-radius: 20px;
+    font-size: 12px; color: #6ee7b7; letter-spacing: 0.5px; z-index: 10;
+  }
+
+  .scene {
+    position: relative; width: 400px; height: 400px;
+  }
+
+  /* 地面 */
+  .ground {
+    position: absolute; bottom: 0; width: 100%; height: 60px;
+    background: linear-gradient(180deg, #1a3a2a 0%, #0f2318 100%);
+    border-radius: 50% 50% 0 0 / 30px 30px 0 0;
+  }
+  .ground::before {
+    content: ''; position: absolute; top: -2px; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, transparent, rgba(52,211,153,0.2), transparent);
+  }
+
+  /* 植物 */
+  .plant {
+    position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .stem {
+    width: 4px; background: linear-gradient(180deg, #34d399, #059669);
+    border-radius: 2px; transition: height 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: bottom; position: relative;
+  }
+
+  .leaf {
+    position: absolute; width: 0; height: 0; transition: all 0.8s ease;
+    opacity: 0;
+  }
+  .leaf.show { opacity: 1; }
+  .leaf-left {
+    transform-origin: right center; right: 2px;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    border-radius: 0 60% 60% 0;
+  }
+  .leaf-right {
+    transform-origin: left center; left: 2px;
+    background: linear-gradient(225deg, #6ee7b7, #34d399);
+    border-radius: 60% 0 0 60%;
+  }
+
+  .flower {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%) scale(0);
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .flower.bloom { transform: translateX(-50%) scale(1); }
+
+  .petal {
+    width: 16px; height: 16px; border-radius: 50% 0;
+    position: absolute; transition: all 0.5s ease;
+  }
+
+  /* 花盆 */
+  .pot {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 50px; background: linear-gradient(180deg, #92400e, #78350f);
+    border-radius: 4px 4px 12px 12px; overflow: hidden;
+  }
+  .pot::before {
+    content: ''; position: absolute; top: 0; left: -4px; right: -4px; height: 12px;
+    background: #a0522d; border-radius: 4px;
+  }
+  .pot-soil {
+    position: absolute; top: 12px; left: 4px; right: 4px; bottom: 4px;
+    background: #3d1f00; border-radius: 0 0 8px 8px;
+  }
+  .pot-water {
+    position: absolute; bottom: 0; left: 0; right: 0; background: rgba(59,130,246,0.3);
+    border-radius: 0 0 8px 8px; transition: height 0.5s ease;
+  }
+
+  /* 粒子 */
+  .particle {
+    position: absolute; pointer-events: none;
+    border-radius: 50%; animation: floatUp 2s ease-out forwards;
+  }
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity: 0.8; }
+    100% { transform: translateY(-80px) scale(0.3); opacity: 0; }
+  }
+
+  /* 星星背景 */
+  .star {
+    position: absolute; width: 2px; height: 2px; background: white;
+    border-radius: 50%; animation: twinkle 3s ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.8; }
+  }
+
+  /* 信息面板 */
+  .panel {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,23,42,0.8); border: 1px solid rgba(52,211,153,0.2);
+    border-radius: 20px; padding: 20px 32px; backdrop-filter: blur(12px);
+    display: flex; align-items: center; gap: 24px;
+  }
+
+  .panel-info { text-align: center; }
+  .panel-title { font-size: 13px; color: #6ee7b7; margin-bottom: 4px; }
+  .panel-value { font-size: 28px; font-weight: 200; }
+  .panel-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .panel-divider {
+    width: 1px; height: 50px; background: rgba(52,211,153,0.15);
+  }
+
+  .water-btn {
+    padding: 12px 28px; border-radius: 16px; border: none;
+    background: linear-gradient(135deg, #34d399, #059669);
+    color: white; font-size: 14px; font-family: inherit;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 4px 16px rgba(52,211,153,0.3);
+  }
+  .water-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(52,211,153,0.4);
+  }
+  .water-btn:active { transform: translateY(0); }
+
+  .level-text {
+    position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: #6ee7b7; opacity: 0.6; white-space: nowrap;
+  }
+
+  .tip {
+    position: fixed; bottom: 8px;
+    font-size: 10px; color: #334155; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="badge">方案 C · 数字花园风格</div>
+
+<div class="scene" id="scene">
+  <!-- 星星 -->
+  <div class="ground"></div>
+  <div class="pot">
+    <div class="pot-soil">
+      <div class="pot-water" id="potWater" style="height: 0%"></div>
+    </div>
+  </div>
+  <div class="plant" id="plant">
+    <div class="stem" id="stem" style="height: 0px"></div>
+  </div>
+  <div class="level-text" id="levelText">浇水让它成长吧 🌱</div>
+</div>
+
+<div class="panel">
+  <div class="panel-info">
+    <div class="panel-title">💧 今日饮水</div>
+    <div class="panel-value" id="amountText">0 ml</div>
+    <div class="panel-sub" id="goalSub">目标 2000ml</div>
+  </div>
+  <div class="panel-divider"></div>
+  <div class="panel-info">
+    <div class="panel-title">🌱 成长等级</div>
+    <div class="panel-value" id="levelValue">Lv.0</div>
+    <div class="panel-sub" id="levelSub">种子</div>
+  </div>
+  <div class="panel-divider"></div>
+  <button class="water-btn" onclick="water()">浇水 +250ml 💧</button>
+</div>
+
+<div class="tip">设计理念: 游戏化 · 数字花园 · 喝水 = 浇花 · 长期养成</div>
+
+<script>
+  let total = 0;
+  const goal = 2000;
+  const levels = [
+    { name: '种子', minMl: 0 },
+    { name: '发芽', minMl: 250 },
+    { name: '幼苗', minMl: 500 },
+    { name: '成长', minMl: 1000 },
+    { name: '茂盛', minMl: 1500 },
+    { name: '开花', minMl: 2000 },
+  ];
+
+  // 生成星星
+  const scene = document.getElementById('scene');
+  for (let i = 0; i < 30; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.left = Math.random() * 400 + 'px';
+    star.style.top = Math.random() * 250 + 'px';
+    star.style.animationDelay = Math.random() * 3 + 's';
+    star.style.opacity = Math.random() * 0.5 + 0.1;
+    scene.appendChild(star);
+  }
+
+  function water() {
+    total = Math.min(total + 250, 2500);
+    document.getElementById('amountText').textContent = total + ' ml';
+
+    const pct = Math.min(total / goal, 1);
+    const lvl = levels.filter(l => total >= l.minMl).length - 1;
+    const level = levels[Math.min(lvl, levels.length - 1)];
+
+    document.getElementById('levelValue').textContent = 'Lv.' + lvl;
+    document.getElementById('levelSub').textContent = level.name;
+
+    // 花盆水位
+    document.getElementById('potWater').style.height = Math.min(pct * 100, 80) + '%';
+
+    // 茎生长
+    const stemHeight = Math.min(pct * 180, 180);
+    const stem = document.getElementById('stem');
+    stem.style.height = stemHeight + 'px';
+
+    // 动态添加叶子
+    updateLeaves(lvl, stemHeight);
+
+    // 开花
+    if (total >= goal) {
+      addFlower(stemHeight);
+      document.getElementById('levelText').textContent = '🌸 绽放了！目标达成！';
+      document.getElementById('goalSub').textContent = '🎉 目标已达成';
+      document.getElementById('goalSub').style.color = '#34d399';
+    } else {
+      const remaining = goal - total;
+      document.getElementById('goalSub').textContent = `还差 ${remaining}ml`;
+      document.getElementById('levelText').textContent = `${level.name} · 继续浇水吧 🌱`;
+    }
+
+    // 水滴粒子
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => addParticle(), i * 80);
+    }
+  }
+
+  function updateLeaves(lvl, stemH) {
+    const plant = document.getElementById('plant');
+    const existing = plant.querySelectorAll('.leaf');
+    existing.forEach(l => l.remove());
+
+    if (lvl >= 2) addLeaf(plant, stemH * 0.4, 'left', 20, 12);
+    if (lvl >= 2) addLeaf(plant, stemH * 0.4, 'right', 18, 10);
+    if (lvl >= 3) addLeaf(plant, stemH * 0.6, 'left', 28, 16);
+    if (lvl >= 3) addLeaf(plant, stemH * 0.6, 'right', 24, 14);
+    if (lvl >= 4) addLeaf(plant, stemH * 0.8, 'left', 32, 18);
+    if (lvl >= 4) addLeaf(plant, stemH * 0.8, 'right', 30, 16);
+  }
+
+  function addLeaf(parent, offsetFromBottom, side, w, h) {
+    const leaf = document.createElement('div');
+    leaf.className = `leaf leaf-${side} show`;
+    leaf.style.width = w + 'px';
+    leaf.style.height = h + 'px';
+    leaf.style.bottom = offsetFromBottom + 'px';
+    if (side === 'left') leaf.style.right = '2px';
+    else leaf.style.left = '2px';
+    document.getElementById('stem').appendChild(leaf);
+  }
+
+  function addFlower(stemH) {
+    if (document.querySelector('.flower')) return;
+    const flower = document.createElement('div');
+    flower.className = 'flower';
+    const colors = ['#f472b6', '#fb923c', '#facc15', '#a78bfa', '#f472b6'];
+    for (let i = 0; i < 5; i++) {
+      const petal = document.createElement('div');
+      petal.className = 'petal';
+      petal.style.background = colors[i];
+      const angle = (i * 72) * Math.PI / 180;
+      petal.style.left = (Math.cos(angle) * 12 - 8) + 'px';
+      petal.style.top = (Math.sin(angle) * 12 - 8) + 'px';
+      petal.style.transform = `rotate(${i * 72 + 45}deg)`;
+      flower.appendChild(petal);
+    }
+    const center = document.createElement('div');
+    center.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#fbbf24;position:absolute;left:3px;top:3px;z-index:1;';
+    flower.appendChild(center);
+    document.getElementById('stem').appendChild(flower);
+    setTimeout(() => flower.classList.add('bloom'), 100);
+  }
+
+  function addParticle() {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 4 + Math.random() * 6;
+    p.style.width = size + 'px';
+    p.style.height = size + 'px';
+    p.style.background = `hsl(${140 + Math.random() * 40}, 70%, ${60 + Math.random() * 20}%)`;
+    p.style.left = (180 + (Math.random() - 0.5) * 60) + 'px';
+    p.style.bottom = '70px';
+    scene.appendChild(p);
+    setTimeout(() => p.remove(), 2000);
+  }
+</script>
+</body>
+</html>

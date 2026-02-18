@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>办公健康守护者 - 功能全景 Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    min-height: 100vh; padding: 24px;
+  }
+
+  .header {
+    text-align: center; margin-bottom: 32px;
+  }
+  .header h1 {
+    font-size: 22px; font-weight: 300; letter-spacing: 1px;
+    background: linear-gradient(135deg, #34d399, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .header p { font-size: 12px; color: #64748b; margin-top: 6px; }
+
+  /* 顶部健康评分 */
+  .score-section {
+    display: flex; justify-content: center; gap: 40px; margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  .score-ring {
+    position: relative; width: 120px; height: 120px; cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .score-ring:hover { transform: scale(1.05); }
+  .score-ring svg { width: 100%; height: 100%; }
+  .score-ring circle.bg { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 8; }
+  .score-ring circle.progress {
+    fill: none; stroke-width: 8; stroke-linecap: round;
+    stroke-dasharray: 326.73; transform: rotate(-90deg); transform-origin: center;
+    transition: stroke-dashoffset 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .score-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .score-value { font-size: 28px; font-weight: 200; }
+  .score-label { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+  /* 功能卡片网格 */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px; max-width: 1000px; margin: 0 auto;
+  }
+
+  .feature-card {
+    background: rgba(30,41,59,0.5); border: 1px solid rgba(71,85,105,0.2);
+    border-radius: 16px; padding: 20px; backdrop-filter: blur(8px);
+    transition: all 0.3s; cursor: default; position: relative; overflow: hidden;
+  }
+  .feature-card:hover {
+    border-color: rgba(71,85,105,0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+
+  .card-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .card-title { font-size: 14px; font-weight: 500; }
+  .card-badge {
+    font-size: 9px; padding: 2px 8px; border-radius: 10px;
+    margin-left: auto;
+  }
+
+  .card-desc { font-size: 12px; color: #94a3b8; line-height: 1.6; margin-bottom: 12px; }
+
+  .card-features {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .tag {
+    font-size: 10px; padding: 3px 10px; border-radius: 8px;
+    background: rgba(255,255,255,0.05); color: #94a3b8;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* 交互预览区 */
+  .preview-bar {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid rgba(71,85,105,0.15);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mini-bar {
+    flex: 1; height: 6px; background: rgba(255,255,255,0.06);
+    border-radius: 3px; overflow: hidden;
+  }
+  .mini-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.8s ease;
+  }
+  .mini-text { font-size: 10px; color: #64748b; white-space: nowrap; }
+
+  .btn-sm {
+    padding: 5px 14px; border-radius: 8px; border: none;
+    font-size: 11px; cursor: pointer; font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  /* 颜色主题 */
+  .theme-eye .card-icon { background: rgba(59,130,246,0.15); }
+  .theme-eye .card-badge { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .theme-eye .mini-fill { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+
+  .theme-water .card-icon { background: rgba(6,182,212,0.15); }
+  .theme-water .card-badge { background: rgba(6,182,212,0.1); color: #22d3ee; }
+  .theme-water .mini-fill { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+
+  .theme-stretch .card-icon { background: rgba(168,85,247,0.15); }
+  .theme-stretch .card-badge { background: rgba(168,85,247,0.1); color: #c084fc; }
+  .theme-stretch .mini-fill { background: linear-gradient(90deg, #a855f7, #c084fc); }
+
+  .theme-posture .card-icon { background: rgba(249,115,22,0.15); }
+  .theme-posture .card-badge { background: rgba(249,115,22,0.1); color: #fb923c; }
+  .theme-posture .mini-fill { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+  .theme-mind .card-icon { background: rgba(52,211,153,0.15); }
+  .theme-mind .card-badge { background: rgba(52,211,153,0.1); color: #6ee7b7; }
+  .theme-mind .mini-fill { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+
+  .theme-sit .card-icon { background: rgba(251,191,36,0.15); }
+  .theme-sit .card-badge { background: rgba(251,191,36,0.1); color: #fbbf24; }
+  .theme-sit .mini-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+  /* 底部路线图 */
+  .roadmap {
+    max-width: 1000px; margin: 40px auto 0;
+    display: flex; gap: 0; position: relative;
+  }
+  .roadmap::before {
+    content: ''; position: absolute; top: 28px; left: 60px; right: 60px; height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #a855f7, #34d399, #64748b);
+    opacity: 0.3;
+  }
+  .milestone {
+    flex: 1; text-align: center; position: relative;
+  }
+  .milestone-dot {
+    width: 16px; height: 16px; border-radius: 50%; margin: 20px auto 12px;
+    position: relative; z-index: 1;
+  }
+  .milestone-ver { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .milestone-desc { font-size: 10px; color: #64748b; line-height: 1.5; }
+
+  .footer {
+    text-align: center; margin-top: 40px; padding-top: 20px;
+    border-top: 1px solid rgba(71,85,105,0.15);
+  }
+  .footer p { font-size: 11px; color: #475569; line-height: 1.8; }
+  .footer .philosophy {
+    font-size: 14px; color: #94a3b8; font-weight: 300; margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>青眸 · 办公健康守护者</h1>
+  <p>科学 · 智能 · 美观 · 克制 — 全方位守护职场健康</p>
+</div>
+
+<!-- 健康评分概览 -->
+<div class="score-section">
+  <div class="score-ring" onclick="animateScore(this, 85, '#60a5fa')">
+    <svg viewBox="0 0 120 120">
+      <circle class="bg" cx="60" cy="60" r="52"/>
+      <circle class="progress" cx="60" cy="60" r="52" stroke="#60a5fa" style="stroke-dashoffset: 326.73"/>
+    </svg>
+    <div class="score-center">
+      <div class="score-value" style="color:#60a5fa">--</div>
+      <div class="score-label">👁 护眼</div>
+    </div>
+  </div>
+  <div class="score-ring" onclick="animateScore(this, 62, '#22d3ee')">
+    <svg viewBox="0 0 120 120">
+      <circle class="bg" cx="60" cy="60" r="52"/>
+      <circle class="progress" cx="60" cy="60" r="52" stroke="#22d3ee" style="stroke-dashoffset: 326.73"/>
+    </svg>
+    <div class="score-center">
+      <div class="score-value" style="color:#22d3ee">--</div>
+      <div class="score-label">💧 补水</div>
+    </div>
+  </div>
+  <div class="score-ring" onclick="animateScore(this, 40, '#c084fc')">
+    <svg viewBox="0 0 120 120">
+      <circle class="bg" cx="60" cy="60" r="52"/>
+      <circle class="progress" cx="60" cy="60" r="52" stroke="#c084fc" style="stroke-dashoffset: 326.73"/>
+    </svg>
+    <div class="score-center">
+      <div class="score-value" style="color:#c084fc">--</div>
+      <div class="score-label">🧘 活动</div>
+    </div>
+  </div>
+  <div class="score-ring" onclick="animateScore(this, 75, '#6ee7b7')">
+    <svg viewBox="0 0 120 120">
+      <circle class="bg" cx="60" cy="60" r="52"/>
+      <circle class="progress" cx="60" cy="60" r="52" stroke="#6ee7b7" style="stroke-dashoffset: 326.73"/>
+    </svg>
+    <div class="score-center">
+      <div class="score-value" style="color:#6ee7b7">--</div>
+      <div class="score-label">🧠 综合</div>
+    </div>
+  </div>
+</div>
+
+<!-- 功能卡片 -->
+<div class="grid">
+  <!-- 护眼提醒 (已有) -->
+  <div class="feature-card theme-eye">
+    <div class="card-header">
+      <div class="card-icon">👁</div>
+      <div class="card-title">护眼提醒</div>
+      <span class="card-badge">v1.0 已实现</span>
+    </div>
+    <div class="card-desc">
+      基于 20-20-20 法则的智能护眼提醒。每 20 分钟提醒远眺 20 秒，每小时长休息 5 分钟。
+      支持全屏覆盖、自然风光、呼吸引导、眼部训练等多种休息模式。
+    </div>
+    <div class="card-features">
+      <span class="tag">Mini Break</span>
+      <span class="tag">Long Break</span>
+      <span class="tag">多屏覆盖</span>
+      <span class="tag">空闲检测</span>
+      <span class="tag">免打扰感知</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">今日完成</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:85%"></div></div>
+      <span class="mini-text">17/20 次</span>
+    </div>
+  </div>
+
+  <!-- 喝水提醒 (v1.1) -->
+  <div class="feature-card theme-water">
+    <div class="card-header">
+      <div class="card-icon">💧</div>
+      <div class="card-title">喝水提醒</div>
+      <span class="card-badge">v1.1 规划中</span>
+    </div>
+    <div class="card-desc">
+      与休息提醒协同的智能喝水引导。休息时温和提示补水进度，托盘快速记录，
+      每日目标追踪。不额外打扰，搭便车在已有的休息节奏上。
+    </div>
+    <div class="card-features">
+      <span class="tag">每日目标</span>
+      <span class="tag">快速记录</span>
+      <span class="tag">休息时提示</span>
+      <span class="tag">水量动画</span>
+      <span class="tag">连续打卡</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">今日饮水</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:62%"></div></div>
+      <span class="mini-text">1250/2000 ml</span>
+    </div>
+  </div>
+
+  <!-- 办公拉伸 (v1.2) -->
+  <div class="feature-card theme-stretch">
+    <div class="card-header">
+      <div class="card-icon">🧘</div>
+      <div class="card-title">拉伸引导</div>
+      <span class="card-badge">v1.2 规划中</span>
+    </div>
+    <div class="card-desc">
+      长休息时提供办公室拉伸动作引导。无需器材，坐在工位即可完成。
+      针对颈椎、肩膀、腰背、手腕等办公易疲劳部位，配合动画演示。
+    </div>
+    <div class="card-features">
+      <span class="tag">颈椎拉伸</span>
+      <span class="tag">肩背放松</span>
+      <span class="tag">手腕护理</span>
+      <span class="tag">动画引导</span>
+      <span class="tag">久坐提醒</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">今日拉伸</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:40%"></div></div>
+      <span class="mini-text">2/5 组</span>
+    </div>
+  </div>
+
+  <!-- 姿势提醒 (v1.2) -->
+  <div class="feature-card theme-posture">
+    <div class="card-header">
+      <div class="card-icon">🪑</div>
+      <div class="card-title">姿势/久坐提醒</div>
+      <span class="card-badge">v1.2 规划中</span>
+    </div>
+    <div class="card-desc">
+      检测连续坐姿时间，定期建议站立活动。可选 AI 摄像头姿势检测（远期），
+      当前阶段通过定时提醒实现。WHO 建议每 30 分钟活动一次。
+    </div>
+    <div class="card-features">
+      <span class="tag">站立提醒</span>
+      <span class="tag">久坐检测</span>
+      <span class="tag">坐站时长统计</span>
+      <span class="tag">AI姿势 (远期)</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">已坐</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:75%"></div></div>
+      <span class="mini-text">45min / 建议站立</span>
+    </div>
+  </div>
+
+  <!-- 正念引导 (v1.3) -->
+  <div class="feature-card theme-mind">
+    <div class="card-header">
+      <div class="card-icon">🧠</div>
+      <div class="card-title">正念 / 减压</div>
+      <span class="card-badge">v1.3 远期</span>
+    </div>
+    <div class="card-desc">
+      1-3 分钟引导式正念练习，配合呼吸引导和环境白噪音。在长休息时可选择
+      进入正念模式，帮助缓解工作压力，提升午后专注力。
+    </div>
+    <div class="card-features">
+      <span class="tag">呼吸引导</span>
+      <span class="tag">白噪音</span>
+      <span class="tag">专注音乐</span>
+      <span class="tag">情绪选择</span>
+      <span class="tag">冥想计时</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">本周正念</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:30%"></div></div>
+      <span class="mini-text">18 分钟</span>
+    </div>
+  </div>
+
+  <!-- 综合健康 -->
+  <div class="feature-card theme-sit">
+    <div class="card-header">
+      <div class="card-icon">📊</div>
+      <div class="card-title">健康仪表盘</div>
+      <span class="card-badge">v1.2 规划中</span>
+    </div>
+    <div class="card-desc">
+      综合展示所有健康维度的数据。每日/每周健康评分，休息完成率、喝水达标率、
+      运动次数、连续打卡天数、工作节奏可视化。帮助用户全面了解健康状况。
+    </div>
+    <div class="card-features">
+      <span class="tag">健康评分</span>
+      <span class="tag">趋势图表</span>
+      <span class="tag">连续打卡</span>
+      <span class="tag">成就系统</span>
+      <span class="tag">每日摘要</span>
+      <span class="tag">下班提醒</span>
+    </div>
+    <div class="preview-bar">
+      <span class="mini-text">今日评分</span>
+      <div class="mini-bar"><div class="mini-fill" style="width:72%"></div></div>
+      <span class="mini-text">72 / 100</span>
+    </div>
+  </div>
+</div>
+
+<!-- 路线图 -->
+<div class="roadmap">
+  <div class="milestone">
+    <div class="milestone-dot" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);"></div>
+    <div class="milestone-ver" style="color:#60a5fa">v1.0</div>
+    <div class="milestone-desc">护眼提醒<br>全屏覆盖<br>统计面板</div>
+  </div>
+  <div class="milestone">
+    <div class="milestone-dot" style="background: linear-gradient(135deg, #06b6d4, #22d3ee);"></div>
+    <div class="milestone-ver" style="color:#22d3ee">v1.1</div>
+    <div class="milestone-desc">喝水提醒<br>托盘记录<br>水量统计</div>
+  </div>
+  <div class="milestone">
+    <div class="milestone-dot" style="background: linear-gradient(135deg, #a855f7, #c084fc);"></div>
+    <div class="milestone-ver" style="color:#c084fc">v1.2</div>
+    <div class="milestone-desc">拉伸引导<br>久坐提醒<br>健康面板</div>
+  </div>
+  <div class="milestone">
+    <div class="milestone-dot" style="background: linear-gradient(135deg, #34d399, #6ee7b7);"></div>
+    <div class="milestone-ver" style="color:#6ee7b7">v1.3</div>
+    <div class="milestone-desc">正念引导<br>白噪音<br>下班提醒</div>
+  </div>
+  <div class="milestone">
+    <div class="milestone-dot" style="background: linear-gradient(135deg, #64748b, #94a3b8);"></div>
+    <div class="milestone-ver" style="color:#94a3b8">v2.0</div>
+    <div class="milestone-desc">AI 姿势<br>数字花园<br>团队功能</div>
+  </div>
+</div>
+
+<!-- 设计哲学 -->
+<div class="footer">
+  <div class="philosophy">科学 · 智能 · 美观 · 克制</div>
+  <p>
+    三不原则: 不过度打扰 · 不贩卖焦虑 · 不追踪成瘾<br>
+    一次休息，多维关怀 — 护眼休息时顺便喝水，长休息时引导拉伸<br>
+    帮助建立健康习惯后优雅淡出，而非绑架用户注意力
+  </p>
+</div>
+
+<script>
+  // 点击评分环动画
+  function animateScore(el, target, color) {
+    const circle = el.querySelector('.progress');
+    const text = el.querySelector('.score-value');
+    const circumference = 2 * Math.PI * 52;
+    const offset = circumference * (1 - target / 100);
+    circle.style.strokeDashoffset = offset;
+
+    let current = 0;
+    const step = () => {
+      current += 2;
+      if (current > target) current = target;
+      text.textContent = current;
+      if (current < target) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // 自动播放评分动画
+  setTimeout(() => {
+    document.querySelectorAll('.score-ring').forEach(ring => ring.click());
+  }, 500);
+</script>
+</body>
+</html>

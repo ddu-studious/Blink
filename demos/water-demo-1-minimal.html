@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案A: 极简水滴 - 喝水提醒 Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .badge {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
+    padding: 6px 16px; border-radius: 20px;
+    font-size: 12px; color: #93c5fd; letter-spacing: 0.5px;
+  }
+
+  .container {
+    display: flex; flex-direction: column; align-items: center; gap: 40px;
+  }
+
+  /* 水杯容器 */
+  .glass-wrapper {
+    position: relative; width: 160px; height: 220px;
+    cursor: pointer; transition: transform 0.3s;
+  }
+  .glass-wrapper:hover { transform: scale(1.03); }
+
+  .glass {
+    position: absolute; bottom: 0; width: 100%; height: 200px;
+    border: 2.5px solid rgba(147,197,253,0.3);
+    border-top: none; border-radius: 0 0 24px 24px;
+    overflow: hidden; background: rgba(30,58,138,0.15);
+    backdrop-filter: blur(8px);
+  }
+
+  .water {
+    position: absolute; bottom: 0; width: 100%; background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%);
+    transition: height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border-radius: 0 0 22px 22px;
+  }
+
+  .water::before {
+    content: ''; position: absolute; top: -8px; left: -10%; width: 120%; height: 16px;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 V16 H0Z' fill='%2360a5fa'/%3E%3C/svg%3E") repeat-x;
+    animation: wave 3s linear infinite;
+  }
+
+  @keyframes wave {
+    0% { background-position-x: 0; }
+    100% { background-position-x: 200px; }
+  }
+
+  /* 水杯刻度 */
+  .marks {
+    position: absolute; right: -30px; bottom: 0; height: 200px;
+    display: flex; flex-direction: column-reverse; justify-content: space-between;
+    padding: 10px 0;
+  }
+  .marks span {
+    font-size: 10px; color: rgba(147,197,253,0.4); line-height: 1;
+  }
+
+  /* 气泡 */
+  .bubble {
+    position: absolute; border-radius: 50%;
+    background: rgba(147,197,253,0.25); animation: rise linear infinite;
+  }
+  @keyframes rise {
+    0% { transform: translateY(0) scale(1); opacity: 0.6; }
+    100% { transform: translateY(-180px) scale(0.3); opacity: 0; }
+  }
+
+  /* 进度信息 */
+  .info { text-align: center; }
+  .amount { font-size: 48px; font-weight: 200; letter-spacing: -2px; color: #f1f5f9; }
+  .amount span { font-size: 20px; color: #64748b; font-weight: 400; }
+  .goal { font-size: 13px; color: #64748b; margin-top: 4px; }
+  .streak { font-size: 12px; color: #f59e0b; margin-top: 8px; }
+
+  /* 快速记录按钮 */
+  .buttons {
+    display: flex; gap: 12px;
+  }
+  .btn {
+    padding: 10px 24px; border-radius: 12px; border: 1.5px solid rgba(59,130,246,0.25);
+    background: rgba(59,130,246,0.08); color: #93c5fd;
+    font-size: 14px; cursor: pointer; transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn:hover {
+    background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5);
+    transform: translateY(-1px);
+  }
+  .btn:active { transform: translateY(0); }
+  .btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-color: #3b82f6; color: white;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  }
+
+  /* 记录动画 */
+  .drop {
+    position: fixed; width: 12px; height: 16px; pointer-events: none;
+    background: radial-gradient(ellipse at 30% 30%, #93c5fd, #3b82f6);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    animation: dropFall 0.6s ease-in forwards;
+    z-index: 100;
+  }
+  @keyframes dropFall {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(200px) scale(0.5); opacity: 0; }
+  }
+
+  .splash {
+    position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 8px; border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(147,197,253,0.6), transparent);
+    animation: splashAnim 0.4s ease-out forwards;
+  }
+  @keyframes splashAnim {
+    0% { transform: translateX(-50%) scaleX(0.3); opacity: 1; }
+    100% { transform: translateX(-50%) scaleX(1.5); opacity: 0; }
+  }
+
+  .tip {
+    position: fixed; bottom: 30px;
+    font-size: 11px; color: #475569; text-align: center; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="badge">方案 A · 极简水滴风格</div>
+
+<div class="container">
+  <div class="glass-wrapper" id="glassWrapper" title="点击记录 250ml">
+    <div class="glass">
+      <div class="water" id="water" style="height: 0%"></div>
+    </div>
+    <div class="marks">
+      <span>2000</span><span>1500</span><span>1000</span><span>500</span><span>0</span>
+    </div>
+  </div>
+
+  <div class="info">
+    <div class="amount"><span id="current">0</span> <span>/ 2000 ml</span></div>
+    <div class="goal" id="goalText">点击水杯或按钮记录喝水</div>
+    <div class="streak" id="streak"></div>
+  </div>
+
+  <div class="buttons">
+    <button class="btn" onclick="record(250)">+250ml</button>
+    <button class="btn btn-primary" onclick="record(500)">+500ml</button>
+    <button class="btn" onclick="record(750)">+750ml</button>
+  </div>
+</div>
+
+<div class="tip">
+  设计理念: TakeSip 风格极简 · 水位动画 · 零追踪压力<br>
+  适合: 菜单栏/托盘常驻的轻量级喝水提示
+</div>
+
+<script>
+  let total = 0;
+  const goal = 2000;
+  const water = document.getElementById('water');
+  const current = document.getElementById('current');
+  const goalText = document.getElementById('goalText');
+  const streak = document.getElementById('streak');
+  const glass = document.getElementById('glassWrapper');
+
+  glass.addEventListener('click', () => record(250));
+
+  function record(amount) {
+    total = Math.min(total + amount, goal + 500);
+    const pct = Math.min((total / goal) * 100, 100);
+    water.style.height = pct + '%';
+    current.textContent = total;
+
+    // 水滴动画
+    const drop = document.createElement('div');
+    drop.className = 'drop';
+    drop.style.left = (window.innerWidth / 2 - 6) + 'px';
+    drop.style.top = '80px';
+    document.body.appendChild(drop);
+    setTimeout(() => drop.remove(), 600);
+
+    // 气泡
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => addBubble(), i * 150);
+    }
+
+    // 更新文字
+    const cups = (total / 250).toFixed(0);
+    const remaining = Math.max(goal - total, 0);
+    if (total >= goal) {
+      goalText.textContent = '🎉 今日目标已达成！';
+      goalText.style.color = '#34d399';
+      streak.textContent = '🔥 太棒了！记得保持';
+    } else {
+      goalText.textContent = `已喝 ${cups} 杯 · 还差 ${remaining}ml`;
+      streak.textContent = '';
+    }
+  }
+
+  function addBubble() {
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const size = 4 + Math.random() * 6;
+    bubble.style.width = size + 'px';
+    bubble.style.height = size + 'px';
+    bubble.style.left = (20 + Math.random() * 120) + 'px';
+    bubble.style.bottom = '10px';
+    bubble.style.animationDuration = (2 + Math.random() * 2) + 's';
+    document.querySelector('.glass').appendChild(bubble);
+    setTimeout(() => bubble.remove(), 4000);
+  }
+</script>
+</body>
+</html>

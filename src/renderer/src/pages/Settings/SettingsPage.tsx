@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 // ---- 类型定义 ----
 
@@ -49,27 +49,58 @@ interface Settings {
 
 type TabType = 'reminder' | 'appearance' | 'smart' | 'restScreen' | 'shortcuts' | 'general' | 'about'
 
-// 侧边栏导航配置
-const NAV_ITEMS: { key: TabType; label: string; icon: string; gradient: string }[] = [
-  { key: 'reminder', label: '提醒', icon: '🔔', gradient: 'from-blue-400 to-blue-600' },
-  { key: 'appearance', label: '外观', icon: '🎨', gradient: 'from-orange-400 to-orange-600' },
-  { key: 'smart', label: '智能', icon: '🧠', gradient: 'from-purple-400 to-purple-600' },
-  { key: 'restScreen', label: '休息屏幕', icon: '🌿', gradient: 'from-teal-400 to-teal-600' },
-  { key: 'shortcuts', label: '快捷键', icon: '⌨️', gradient: 'from-pink-400 to-pink-600' },
-  { key: 'general', label: '通用', icon: '⚙️', gradient: 'from-gray-400 to-gray-600' }
+// 侧边栏导航配置（含搜索关键词）
+const NAV_ITEMS: { key: TabType; label: string; icon: string; gradient: string; keywords: string[] }[] = [
+  { key: 'reminder', label: '提醒', icon: '🔔', gradient: 'from-blue-400 to-blue-600', keywords: ['提醒', '短休息', '长休息', 'mini', 'long', 'break', '间隔', '时长', '声音', '通知', '音量', '跳过'] },
+  { key: 'appearance', label: '外观', icon: '🎨', gradient: 'from-orange-400 to-orange-600', keywords: ['外观', '主题', '深色', '浅色', '暗色', '亮色', 'theme', 'dark', 'light', '语言', 'language'] },
+  { key: 'smart', label: '智能', icon: '🧠', gradient: 'from-purple-400 to-purple-600', keywords: ['智能', '空闲', 'idle', '免打扰', '全屏', '严格', '工作时段', '时间'] },
+  { key: 'restScreen', label: '休息屏幕', icon: '🌿', gradient: 'from-teal-400 to-teal-600', keywords: ['休息', '屏幕', '自然', '呼吸', '眼部', '训练', '暗屏', '音效', '环境音'] },
+  { key: 'shortcuts', label: '快捷键', icon: '⌨️', gradient: 'from-pink-400 to-pink-600', keywords: ['快捷键', 'shortcut', '暂停', '恢复', '立即休息', '跳过'] },
+  { key: 'general', label: '通用', icon: '⚙️', gradient: 'from-gray-400 to-gray-600', keywords: ['通用', '自启动', '开机', 'auto', 'launch'] }
 ]
 
-const ABOUT_NAV = { key: 'about' as TabType, label: '关于', icon: 'ℹ️', gradient: 'from-sky-400 to-sky-600' }
+const ABOUT_NAV = { key: 'about' as TabType, label: '关于', icon: 'ℹ️', gradient: 'from-sky-400 to-sky-600', keywords: ['关于', 'about', '版本', 'version'] }
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('reminder')
   const [saved, setSaved] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredNavItems = useMemo(() => {
+    if (!searchQuery.trim()) return NAV_ITEMS
+    const q = searchQuery.toLowerCase()
+    return NAV_ITEMS.filter(
+      (item) =>
+        item.label.toLowerCase().includes(q) ||
+        item.keywords.some((kw) => kw.toLowerCase().includes(q))
+    )
+  }, [searchQuery])
+
+  const showAbout = useMemo(() => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return ABOUT_NAV.label.toLowerCase().includes(q) ||
+      ABOUT_NAV.keywords.some((kw) => kw.toLowerCase().includes(q))
+  }, [searchQuery])
+
+  // 搜索时自动跳转到第一个匹配项
+  useEffect(() => {
+    if (!searchQuery.trim()) return
+    if (filteredNavItems.length > 0) {
+      const alreadyVisible = filteredNavItems.some((item) => item.key === activeTab) ||
+        (showAbout && activeTab === 'about')
+      if (!alreadyVisible) {
+        setActiveTab(filteredNavItems[0].key)
+      }
+    } else if (showAbout) {
+      setActiveTab('about')
+    }
+  }, [searchQuery, filteredNavItems, showAbout])
 
   // 加载设置
   useEffect(() => {
     window.api.settings.get().then((s: Settings) => {
-      // 兼容旧版无 restScreen 字段
       if (!s.reminder.restScreen) {
         s.reminder.restScreen = {
           miniBreakMode: 'classic',
@@ -102,16 +133,32 @@ export default function SettingsPage() {
     <div className="flex h-full bg-gray-100 dark:bg-[#1e1e1e]">
       {/* Apple 风格侧边栏 */}
       <div className="w-[200px] bg-gray-50/80 dark:bg-[#252525] border-r border-gray-200/80 dark:border-[#333] p-3 space-y-0.5 overflow-y-auto flex-shrink-0">
-        {/* 搜索栏 (装饰性) */}
+        {/* 搜索栏 */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-200/60 dark:bg-[#333] rounded-lg mb-3">
-          <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <span className="text-[12px] text-gray-400 dark:text-gray-500">搜索</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索"
+            className="flex-1 bg-transparent border-none outline-none text-[12px] text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* 导航项 */}
-        {NAV_ITEMS.map((item) => (
+        {filteredNavItems.map((item) => (
           <button
             key={item.key}
             onClick={() => setActiveTab(item.key)}
@@ -128,22 +175,28 @@ export default function SettingsPage() {
           </button>
         ))}
 
+        {filteredNavItems.length === 0 && !showAbout && (
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center py-4">无匹配结果</p>
+        )}
+
         {/* 分割线 + 关于 */}
-        <div className="pt-2 mt-2 border-t border-gray-200/60 dark:border-[#333]">
-          <button
-            onClick={() => setActiveTab('about')}
-            className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
-              activeTab === 'about'
-                ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-medium'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]'
-            }`}
-          >
-            <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${ABOUT_NAV.gradient} flex items-center justify-center`}>
-              <span className="text-white text-[10px]">{ABOUT_NAV.icon}</span>
-            </div>
-            {ABOUT_NAV.label}
-          </button>
-        </div>
+        {showAbout && (
+          <div className="pt-2 mt-2 border-t border-gray-200/60 dark:border-[#333]">
+            <button
+              onClick={() => setActiveTab('about')}
+              className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
+                activeTab === 'about'
+                  ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-medium'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]'
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${ABOUT_NAV.gradient} flex items-center justify-center`}>
+                <span className="text-white text-[10px]">{ABOUT_NAV.icon}</span>
+              </div>
+              {ABOUT_NAV.label}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 主内容区 */}

@@ -104,6 +104,26 @@ export function registerIpcHandlers(timerManager: TimerManager): void {
     return statsDatabase.getStreak()
   })
 
+  // ---- 喝水 ----
+
+  ipcMain.handle(IPC_CHANNELS.WATER_RECORD, (_, { amount, source }) => {
+    statsDatabase.addWaterRecord(amount, source || 'manual')
+    return statsDatabase.getWaterToday()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WATER_GET_TODAY, () => {
+    return statsDatabase.getWaterToday()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WATER_GET_RANGE, (_, { startDate, endDate }) => {
+    return statsDatabase.getWaterRange(startDate, endDate)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WATER_GET_STREAK, () => {
+    const waterSettings = settingsStore.get('water')
+    return statsDatabase.getWaterStreak(waterSettings.dailyGoal)
+  })
+
   log.info('[IPC] 所有 IPC 处理器已注册')
 }
 

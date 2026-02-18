@@ -87,10 +87,21 @@ export interface SmartSettings {
   workSchedule: WorkSchedule
 }
 
+/** 喝水提醒设置 */
+export interface WaterReminderSettings {
+  enabled: boolean // 默认 true
+  dailyGoal: number // ml, 默认 2000
+  quickAmounts: number[] // 默认 [250, 500, 750]
+  showInBreak: boolean // 休息时显示, 默认 true
+  independentReminder: boolean // 独立提醒, 默认 false
+  reminderInterval: number // 独立提醒间隔分钟, 默认 90
+}
+
 export interface AppSettings {
   general: GeneralSettings
   reminder: ReminderSettings
   smart: SmartSettings
+  water: WaterReminderSettings
   firstRun: boolean
 }
 
@@ -140,6 +151,12 @@ export const IPC_CHANNELS = {
   STATS_GET_TODAY: 'stats:get-today',
   STATS_GET_RANGE: 'stats:get-range',
   STATS_GET_STREAK: 'stats:get-streak',
+
+  // 喝水
+  WATER_RECORD: 'water:record',
+  WATER_GET_TODAY: 'water:get-today',
+  WATER_GET_RANGE: 'water:get-range',
+  WATER_GET_STREAK: 'water:get-streak',
 
   // 应用
   APP_QUIT: 'app:quit',
@@ -199,6 +216,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
       endTime: '18:00',
       daysOfWeek: [1, 2, 3, 4, 5]
     }
+  },
+  water: {
+    enabled: true,
+    dailyGoal: 2000,
+    quickAmounts: [250, 500, 750],
+    showInBreak: true,
+    independentReminder: false,
+    reminderInterval: 90
   },
   firstRun: true
 }

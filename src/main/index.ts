@@ -234,6 +234,19 @@ app.whenReady().then(async () => {
   // 设置应用 ID (Windows)
   electronApp.setAppUserModelId('com.qingmou.app')
 
+  // macOS: 设置 Dock 图标 (dev 模式下 Electron 默认图标不是应用图标)
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      const dockIconPath = join(__dirname, '../resources/icons/icon.png')
+      const dockIcon = nativeImage.createFromPath(dockIconPath)
+      if (!dockIcon.isEmpty()) {
+        app.dock.setIcon(dockIcon)
+      }
+    } catch {
+      // 图标不存在时忽略
+    }
+  }
+
   // 开发模式下 F12 打开 DevTools
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

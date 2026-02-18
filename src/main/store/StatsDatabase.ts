@@ -29,6 +29,20 @@ export interface DailyStats {
   totalRestSeconds: number
 }
 
+export interface WaterRecord {
+  id?: number
+  amountMl: number
+  recordedAt: string
+  createdDate: string
+  source: 'manual' | 'quick' | 'tray'
+}
+
+export interface WaterDailyStats {
+  date: string
+  totalMl: number
+  recordCount: number
+}
+
 class StatsDatabase {
   private db: Database.Database | null = null
 
@@ -71,6 +85,16 @@ class StatsDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date);
+
+      CREATE TABLE IF NOT EXISTS water_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount_ml INTEGER NOT NULL,
+        recorded_at TEXT NOT NULL,
+        created_date TEXT NOT NULL,
+        source TEXT DEFAULT 'manual'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_water_records_date ON water_records(created_date);
     `)
   }
 
@@ -190,6 +214,85 @@ class StatsDatabase {
 
     // 如果今天还没有记录，从昨天开始算
     if (rows.length === 0 || rows[0].date !== checkDate.format('YYYY-MM-DD')) {
+      checkDate = checkDate.subtract(1, 'day')
+    }
+
+    for (const row of rows) {
+      if (row.date === checkDate.format('YYYY-MM-DD')) {
+        streak++
+        checkDate = checkDate.subtract(1, 'day')
+      } else {
+        break
+      }
+    }
+
+    return streak
+  }
+
+  // ========================================
+  // 喝水记录
+  // ========================================
+
+  /** 记录一次喝水 */
+  addWaterRecord(amountMl: number, source: WaterRecord['source'] = 'manual'): number {
+    const now = dayjs()
+    const stmt = this.db!.prepare(`
+      INSERT INTO water_records (amount_ml, recorded_at, created_date, source)
+      VALUES (?, ?, ?, ?)
+    `)
+    const result = stmt.run(amountMl, now.toISOString(), now.format('YYYY-MM-DD'), source)
+    log.info(`[StatsDatabase] 记录喝水: ${amountMl}ml (${source})`)
+    return result.lastInsertRowid as number
+  }
+
+  /** 获取今日喝水统计 */
+  getWaterToday(): WaterDailyStats {
+    const today = dayjs().format('YYYY-MM-DD')
+    const row = this.db!.prepare(
+      'SELECT SUM(amount_ml) as total_ml, COUNT(*) as record_count FROM water_records WHERE created_date = ?'
+    ).get(today) as { total_ml: number | null; record_count: number } | undefined
+
+    return {
+      date: today,
+      totalMl: row?.total_ml || 0,
+      recordCount: row?.record_count || 0
+    }
+  }
+
+  /** 获取日期范围内的每日喝水统计 */
+  getWaterRange(startDate: string, endDate: string): WaterDailyStats[] {
+    const rows = this.db!.prepare(
+      `SELECT created_date as date, SUM(amount_ml) as total_ml, COUNT(*) as record_count
+       FROM water_records
+       WHERE created_date >= ? AND created_date <= ?
+       GROUP BY created_date
+       ORDER BY created_date ASC`
+    ).all(startDate, endDate) as { date: string; total_ml: number; record_count: number }[]
+
+    return rows.map((row) => ({
+      date: row.date,
+      totalMl: row.total_ml,
+      recordCount: row.record_count
+    }))
+  }
+
+  /** 获取连续喝水达标天数 */
+  getWaterStreak(dailyGoal: number): number {
+    const rows = this.db!.prepare(
+      `SELECT created_date as date, SUM(amount_ml) as total_ml
+       FROM water_records
+       GROUP BY created_date
+       HAVING total_ml >= ?
+       ORDER BY created_date DESC
+       LIMIT 90`
+    ).all(dailyGoal) as { date: string; total_ml: number }[]
+
+    if (rows.length === 0) return 0
+
+    let streak = 0
+    let checkDate = dayjs()
+
+    if (rows[0].date !== checkDate.format('YYYY-MM-DD')) {
       checkDate = checkDate.subtract(1, 'day')
     }
 
