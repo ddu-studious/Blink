@@ -1,4 +1,15 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+
+interface WaterDailyStats {
+  totalMl: number
+  recordCount: number
+}
+
+interface WaterSettings {
+  enabled: boolean
+  dailyGoal: number
+  quickAmounts: number[]
+}
 
 interface TodayStats {
   date: string
@@ -26,6 +37,14 @@ export default function DashboardPage() {
   const [weekStats, setWeekStats] = useState<TodayStats[]>([])
   const [streak, setStreak] = useState(0)
   const [activeTab, setActiveTab] = useState<TabView>('today')
+  const [waterStats, setWaterStats] = useState<WaterDailyStats | null>(null)
+  const [waterStreak, setWaterStreak] = useState(0)
+  const [waterSettings, setWaterSettings] = useState<WaterSettings | null>(null)
+
+  const refreshWater = useCallback(() => {
+    window.api.water.getToday().then(setWaterStats)
+    window.api.water.getStreak().then(setWaterStreak)
+  }, [])
 
   useEffect(() => {
     // 加载今日统计
@@ -43,6 +62,10 @@ export default function DashboardPage() {
     weekAgo.setDate(weekAgo.getDate() - 6)
     const formatDate = (d: Date) => d.toISOString().split('T')[0]
     window.api.stats.getRange(formatDate(weekAgo), formatDate(today)).then(setWeekStats)
+
+    // 加载喝水数据
+    window.api.settings.get().then((s: { water: WaterSettings }) => setWaterSettings(s.water))
+    refreshWater()
 
     // 监听状态更新
     const cleanup = window.api.timer.onStateUpdate((state) => {
@@ -115,6 +138,12 @@ export default function DashboardPage() {
           formatMinutes={formatMinutes}
           statusLabel={statusLabel}
           statusColor={statusColor}
+          waterStats={waterStats}
+          waterStreak={waterStreak}
+          waterSettings={waterSettings}
+          onRecordWater={(amount) => {
+            window.api.water.record(amount, 'manual').then(() => refreshWater())
+          }}
         />
       ) : (
         <WeekView weekStats={weekStats} streak={streak} />
@@ -159,7 +188,11 @@ function TodayView({
   streak,
   formatMinutes,
   statusLabel,
-  statusColor
+  statusColor,
+  waterStats,
+  waterStreak,
+  waterSettings,
+  onRecordWater
 }: {
   stats: TodayStats | null
   timerState: TimerState | null
@@ -167,7 +200,19 @@ function TodayView({
   formatMinutes: (s: number) => string
   statusLabel: (s: string) => string
   statusColor: (s: string) => string
+  waterStats: WaterDailyStats | null
+  waterStreak: number
+  waterSettings: WaterSettings | null
+  onRecordWater: (amount: number) => void
 }) {
+  const dailyGoal = waterSettings?.dailyGoal || 2000
+  const totalMl = waterStats?.totalMl || 0
+  const waterProgress = Math.min(totalMl / dailyGoal, 1)
+  const cups = Math.round(totalMl / 250)
+  const goalCups = Math.round(dailyGoal / 250)
+  const remaining = Math.max(goalCups - cups, 0)
+  const isComplete = totalMl >= dailyGoal
+
   return (
     <>
       {/* 当前状态 */}
@@ -232,6 +277,69 @@ function TodayView({
           color="text-orange-500"
         />
       </div>
+
+      {/* 今日喝水卡片 */}
+      {waterSettings?.enabled && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">💧 今日喝水</h3>
+            {waterStreak > 0 && (
+              <span className="text-xs text-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 px-2 py-0.5 rounded-full">
+                🔥 连续 {waterStreak} 天达标
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-5">
+            {/* 圆环进度 */}
+            <div className="relative w-20 h-20 flex-shrink-0">
+              <svg className="w-20 h-20" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="currentColor" strokeWidth="5" className="text-gray-100 dark:text-gray-700" />
+                <circle
+                  cx="40" cy="40" r="32"
+                  fill="none"
+                  stroke={isComplete ? '#10b981' : '#06b6d4'}
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 32}`}
+                  strokeDashoffset={`${2 * Math.PI * 32 * (1 - waterProgress)}`}
+                  transform="rotate(-90 40 40)"
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-lg font-semibold tabular-nums ${isComplete ? 'text-emerald-500' : 'text-cyan-500'}`}>
+                  {Math.round(waterProgress * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* 信息 */}
+            <div className="flex-1">
+              <p className="text-2xl font-semibold text-gray-800 dark:text-white tabular-nums">
+                {totalMl}
+                <span className="text-sm font-normal text-gray-400 ml-1">/ {dailyGoal} ml</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {isComplete ? '🎉 今日已达标！' : `还差 ${remaining} 杯 (${dailyGoal - totalMl}ml)`}
+              </p>
+
+              {/* 快速记录按钮 */}
+              <div className="flex gap-2 mt-3">
+                {(waterSettings.quickAmounts || [250, 500, 750]).map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => onRecordWater(amount)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-lg transition-colors"
+                  >
+                    +{amount}ml
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 达成率 */}
       {stats && (

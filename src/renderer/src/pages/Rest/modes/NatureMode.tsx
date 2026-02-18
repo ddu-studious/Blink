@@ -10,6 +10,7 @@ interface NatureModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  waterOverlay?: React.ReactNode
 }
 
 // 自然场景配置 - 使用 resources/images/nature/ 下的真实图片
@@ -32,7 +33,7 @@ function getImagePath(filename: string): string {
   ).href
 }
 
-export default function NatureMode({ remaining, formatTime, showSkip, onSkip }: NatureModeProps) {
+export default function NatureMode({ remaining, formatTime, showSkip, onSkip, waterOverlay }: NatureModeProps) {
   const [bottomIndex, setBottomIndex] = useState(0)
   const [topIndex, setTopIndex] = useState(1)
   const [showTop, setShowTop] = useState(false)
@@ -133,6 +134,7 @@ export default function NatureMode({ remaining, formatTime, showSkip, onSkip }: 
               {SCENES[displayIndex].name}
               <span className="ml-2 text-white/15">Photo by {SCENES[displayIndex].credit}</span>
             </p>
+            {waterOverlay && <div className="mt-2">{waterOverlay}</div>}
           </div>
           <div className="flex flex-col items-end gap-3">
             <div className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/10">

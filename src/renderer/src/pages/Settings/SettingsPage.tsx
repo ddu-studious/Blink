@@ -11,6 +11,15 @@ interface ShortcutSettings {
   skipBreak: string
 }
 
+interface WaterSettings {
+  enabled: boolean
+  dailyGoal: number
+  quickAmounts: number[]
+  showInBreak: boolean
+  independentReminder: boolean
+  reminderInterval: number
+}
+
 interface Settings {
   general: {
     autoLaunch: boolean
@@ -45,13 +54,15 @@ interface Settings {
       daysOfWeek: number[]
     }
   }
+  water: WaterSettings
 }
 
-type TabType = 'reminder' | 'appearance' | 'smart' | 'restScreen' | 'shortcuts' | 'general' | 'about'
+type TabType = 'reminder' | 'water' | 'appearance' | 'smart' | 'restScreen' | 'shortcuts' | 'general' | 'about'
 
 // 侧边栏导航配置（含搜索关键词）
 const NAV_ITEMS: { key: TabType; label: string; icon: string; gradient: string; keywords: string[] }[] = [
   { key: 'reminder', label: '提醒', icon: '🔔', gradient: 'from-blue-400 to-blue-600', keywords: ['提醒', '短休息', '长休息', 'mini', 'long', 'break', '间隔', '时长', '声音', '通知', '音量', '跳过'] },
+  { key: 'water', label: '喝水', icon: '💧', gradient: 'from-cyan-400 to-blue-500', keywords: ['喝水', '饮水', 'water', '水量', '杯', '目标', 'ml', '提醒'] },
   { key: 'appearance', label: '外观', icon: '🎨', gradient: 'from-orange-400 to-orange-600', keywords: ['外观', '主题', '深色', '浅色', '暗色', '亮色', 'theme', 'dark', 'light', '语言', 'language'] },
   { key: 'smart', label: '智能', icon: '🧠', gradient: 'from-purple-400 to-purple-600', keywords: ['智能', '空闲', 'idle', '免打扰', '全屏', '严格', '工作时段', '时间'] },
   { key: 'restScreen', label: '休息屏幕', icon: '🌿', gradient: 'from-teal-400 to-teal-600', keywords: ['休息', '屏幕', '自然', '呼吸', '眼部', '训练', '暗屏', '音效', '环境音'] },
@@ -107,6 +118,16 @@ export default function SettingsPage() {
           longBreakMode: 'nature',
           ambientSoundEnabled: true,
           ambientSoundType: 'birds'
+        }
+      }
+      if (!s.water) {
+        s.water = {
+          enabled: true,
+          dailyGoal: 2000,
+          quickAmounts: [250, 500, 750],
+          showInBreak: true,
+          independentReminder: false,
+          reminderInterval: 90
         }
       }
       setSettings(s)
@@ -209,6 +230,7 @@ export default function SettingsPage() {
         )}
 
         {activeTab === 'reminder' && <ReminderSection settings={settings} onSave={saveSettings} />}
+        {activeTab === 'water' && <WaterSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'appearance' && <AppearanceSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'smart' && <SmartSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'restScreen' && <RestScreenSection settings={settings} onSave={saveSettings} />}
@@ -341,6 +363,101 @@ function ReminderSection({ settings, onSave }: { settings: Settings; onSave: (s:
           <InlineSlider value={reminder.skipButtonDelay} min={0} max={30} step={1} unit="秒" onChange={(v) => onSave({ reminder: { ...reminder, skipButtonDelay: v } })} />
         </CardRow>
       </Card>
+    </div>
+  )
+}
+
+// ========================================================
+// 喝水提醒设置
+// ========================================================
+function WaterSection({ settings, onSave }: { settings: Settings; onSave: (s: Partial<Settings>) => void }) {
+  const { water } = settings
+
+  const updateWater = (key: string, value: boolean | number) => {
+    onSave({ water: { ...water, [key]: value } })
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mb-4">喝水提醒</h2>
+
+      {/* 喝水提醒开关 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="💧" bg="bg-cyan-100 dark:bg-cyan-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">喝水提醒</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">在休息时显示喝水进度提示</p>
+            </div>
+          </div>
+          <AppleToggle checked={water.enabled} onChange={(v) => updateWater('enabled', v)} />
+        </CardRow>
+      </Card>
+
+      {water.enabled && (
+        <>
+          {/* 每日目标 */}
+          <Card>
+            <CardRow>
+              <div className="flex items-center gap-3">
+                <IconBox icon="🎯" bg="bg-blue-100 dark:bg-blue-900/50" />
+                <div>
+                  <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">每日目标</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                    约 {Math.round(water.dailyGoal / 250)} 杯 (250ml/杯)
+                  </p>
+                </div>
+              </div>
+              <InlineSlider
+                value={water.dailyGoal}
+                min={1000}
+                max={4000}
+                step={250}
+                unit="ml"
+                color="accent-cyan-500"
+                onChange={(v) => updateWater('dailyGoal', v)}
+              />
+            </CardRow>
+          </Card>
+
+          {/* 显示选项 */}
+          <Card>
+            <CardRow>
+              <div>
+                <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">休息时显示</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">在 Mini/Long Break 时展示喝水进度</p>
+              </div>
+              <AppleToggle checked={water.showInBreak} onChange={(v) => updateWater('showInBreak', v)} />
+            </CardRow>
+            <CardDivider />
+            <CardRow>
+              <div>
+                <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">独立喝水提醒</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">定期发送系统通知提醒喝水</p>
+              </div>
+              <AppleToggle checked={water.independentReminder} onChange={(v) => updateWater('independentReminder', v)} />
+            </CardRow>
+            {water.independentReminder && (
+              <>
+                <CardDividerThin />
+                <CardRow>
+                  <span className="text-[13px] text-gray-600 dark:text-gray-400">提醒间隔</span>
+                  <InlineSlider
+                    value={water.reminderInterval}
+                    min={30}
+                    max={180}
+                    step={15}
+                    unit="分钟"
+                    color="accent-cyan-500"
+                    onChange={(v) => updateWater('reminderInterval', v)}
+                  />
+                </CardRow>
+              </>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   )
 }

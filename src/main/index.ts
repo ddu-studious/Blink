@@ -17,7 +17,7 @@ import { DndDetector } from './monitor/DndDetector'
 import { FullscreenDetector } from './monitor/FullscreenDetector'
 import { settingsStore } from './store/SettingsStore'
 import { statsDatabase } from './store/StatsDatabase'
-import { registerIpcHandlers, broadcastTimerState } from './ipc/ipcHandlers'
+import { registerIpcHandlers, broadcastTimerState, setWaterRecordCallback } from './ipc/ipcHandlers'
 import { autoLaunchService } from './services/AutoLaunchService'
 import { soundService } from './services/SoundService'
 import { shortcutService } from './services/ShortcutService'
@@ -61,6 +61,10 @@ function initModules(): void {
     onSkipToNext: () => timerManager.skipBreak(),
     onShowSettings: () => windowManager.showSettings(),
     onShowDashboard: () => windowManager.showDashboard(),
+    onRecordWater: (amount: number) => {
+      statsDatabase.addWaterRecord(amount, 'tray')
+      refreshWaterProgress()
+    },
     onShowAbout: () => {
       // 加载应用图标
       let icon: Electron.NativeImage | undefined
@@ -202,7 +206,28 @@ function initModules(): void {
     }
   })
 
+  // 初始化喝水进度 & 注册 IPC 回调
+  refreshWaterProgress()
+  setWaterRecordCallback(refreshWaterProgress)
+
   log.info('[Main] 所有模块初始化完成')
+}
+
+/** 刷新托盘喝水进度 */
+function refreshWaterProgress(): void {
+  const waterSettings = settingsStore.get('water')
+  trayManager.setWaterEnabled(waterSettings.enabled)
+  if (waterSettings.enabled) {
+    const todayWater = statsDatabase.getWaterToday()
+    trayManager.updateWaterProgress({
+      totalMl: todayWater.totalMl,
+      dailyGoal: waterSettings.dailyGoal
+    })
+    // 更新菜单以反映新进度
+    const state = timerManager.getState()
+    trayManager.updateMenu(state.status)
+    trayManager.updateTooltip(state)
+  }
 }
 
 /** 初始化开机自启动 */

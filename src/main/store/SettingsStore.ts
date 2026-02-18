@@ -41,6 +41,12 @@ class SettingsStore {
       this.store.set('reminder.restScreen', DEFAULT_SETTINGS.reminder.restScreen)
       log.info('[SettingsStore] 迁移: 添加 restScreen 默认值')
     }
+    // v1.1.0: 添加 water 字段 (喝水提醒)
+    const water = this.store.get('water')
+    if (!water) {
+      this.store.set('water', DEFAULT_SETTINGS.water)
+      log.info('[SettingsStore] 迁移: 添加 water 默认值')
+    }
   }
 
   /** 获取全部设置 */
@@ -49,6 +55,7 @@ class SettingsStore {
       general: this.store.get('general', DEFAULT_SETTINGS.general),
       reminder: this.store.get('reminder', DEFAULT_SETTINGS.reminder),
       smart: this.store.get('smart', DEFAULT_SETTINGS.smart),
+      water: this.store.get('water', DEFAULT_SETTINGS.water),
       firstRun: this.store.get('firstRun', true)
     }
   }

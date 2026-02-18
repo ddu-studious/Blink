@@ -18,6 +18,12 @@ export interface TrayCallbacks {
   onShowDashboard: () => void
   onShowAbout: () => void
   onQuit: () => void
+  onRecordWater?: (amount: number) => void
+}
+
+export interface WaterProgress {
+  totalMl: number
+  dailyGoal: number
 }
 
 /**
@@ -111,6 +117,8 @@ function createTrayIcon(): Electron.NativeImage {
 export class TrayManager {
   private tray: Tray | null = null
   private callbacks: TrayCallbacks
+  private waterProgress: WaterProgress = { totalMl: 0, dailyGoal: 2000 }
+  private waterEnabled: boolean = true
 
   constructor(callbacks: TrayCallbacks) {
     this.callbacks = callbacks
@@ -196,6 +204,23 @@ export class TrayManager {
         enabled: isRunning
       },
       { type: 'separator' },
+      ...(this.waterEnabled && this.callbacks.onRecordWater
+        ? [
+            {
+              label: `💧 记录喝水`,
+              submenu: [
+                { label: '250ml (一杯)', click: () => this.callbacks.onRecordWater!(250) },
+                { label: '500ml (一瓶)', click: () => this.callbacks.onRecordWater!(500) },
+                { label: '750ml (大杯)', click: () => this.callbacks.onRecordWater!(750) }
+              ]
+            } as Electron.MenuItemConstructorOptions,
+            {
+              label: `💧 今日: ${this.waterProgress.totalMl}/${this.waterProgress.dailyGoal}ml`,
+              enabled: false
+            } as Electron.MenuItemConstructorOptions,
+            { type: 'separator' as const } as Electron.MenuItemConstructorOptions
+          ]
+        : []),
       {
         label: '统计',
         click: () => this.callbacks.onShowDashboard()
@@ -243,6 +268,12 @@ export class TrayManager {
         break
     }
 
+    if (this.waterEnabled) {
+      const cups = Math.round(this.waterProgress.totalMl / 250)
+      const goalCups = Math.round(this.waterProgress.dailyGoal / 250)
+      tooltip += ` | 💧 ${cups}/${goalCups}杯`
+    }
+
     this.tray.setToolTip(tooltip)
   }
 
@@ -285,6 +316,16 @@ export class TrayManager {
     }
 
     this.tray.setTitle(title)
+  }
+
+  /** 更新喝水进度 */
+  updateWaterProgress(progress: WaterProgress): void {
+    this.waterProgress = progress
+  }
+
+  /** 设置喝水功能启用状态 */
+  setWaterEnabled(enabled: boolean): void {
+    this.waterEnabled = enabled
   }
 
   /** 销毁托盘 */

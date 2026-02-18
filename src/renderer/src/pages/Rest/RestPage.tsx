@@ -3,6 +3,7 @@ import NatureMode from './modes/NatureMode'
 import BreathingMode from './modes/BreathingMode'
 import EyeTrainingMode from './modes/EyeTrainingMode'
 import DarkScreenMode from './modes/DarkScreenMode'
+import WaterProgressRing from './components/WaterProgressRing'
 
 // 护眼小知识库
 const EYE_TIPS = [
@@ -84,6 +85,17 @@ interface AppSettings {
   smart: {
     strictMode: boolean
   }
+  water?: {
+    enabled: boolean
+    dailyGoal: number
+    showInBreak: boolean
+    quickAmounts: number[]
+  }
+}
+
+interface WaterTodayStats {
+  totalMl: number
+  recordCount: number
 }
 
 export default function RestPage({ breakType, duration, isPrimary }: RestPageProps) {
@@ -92,16 +104,28 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [showVideo, setShowVideo] = useState(false)
   const [currentVideo, setCurrentVideo] = useState<(typeof EXERCISE_VIDEOS)[0] | null>(null)
+  const [waterStats, setWaterStats] = useState<WaterTodayStats | null>(null)
 
   const [tip] = useState(() => {
     const tips = breakType === 'mini' ? EYE_TIPS : STRETCH_TIPS
     return tips[Math.floor(Math.random() * tips.length)]
   })
 
-  // 加载设置
+  // 加载设置 & 喝水数据
   useEffect(() => {
     window.api.settings.get().then((s: AppSettings) => setSettings(s))
+    window.api.water.getToday().then((w: WaterTodayStats) => setWaterStats(w))
   }, [])
+
+  const waterEnabled = settings?.water?.enabled && settings?.water?.showInBreak
+  const dailyGoal = settings?.water?.dailyGoal || 2000
+
+  const handleRecordWater = useCallback(
+    (amount: number) => {
+      window.api.water.record(amount, 'quick').then((w: WaterTodayStats) => setWaterStats(w))
+    },
+    []
+  )
 
   // 倒计时
   useEffect(() => {
@@ -219,6 +243,16 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
     )
   }
 
+  const waterOverlay = waterEnabled && waterStats ? (
+    <WaterProgressRing
+      totalMl={waterStats.totalMl}
+      dailyGoal={dailyGoal}
+      isLongBreak={isLong}
+      quickAmounts={settings?.water?.quickAmounts || [250, 500, 750]}
+      onRecord={handleRecordWater}
+    />
+  ) : null
+
   // 非经典模式: 渲染对应组件
   if (currentMode !== 'classic' && !showVideo) {
     switch (currentMode) {
@@ -229,6 +263,7 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            waterOverlay={waterOverlay}
           />
         )
       case 'breathing':
@@ -362,6 +397,9 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
               </p>
               <p className="text-sm text-white/40 max-w-sm leading-relaxed">💡 {tip}</p>
             </div>
+
+            {/* 喝水进度 */}
+            {waterOverlay}
 
             {/* 运动视频推荐区域 */}
             {isLong && (

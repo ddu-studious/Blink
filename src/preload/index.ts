@@ -44,6 +44,16 @@ const qingmouAPI = {
     getRange: (startDate: string, endDate: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_RANGE, { startDate, endDate }),
     getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.STATS_GET_STREAK)
+  },
+
+  // ---- 喝水 ----
+  water: {
+    record: (amount: number, source: string = 'manual') =>
+      ipcRenderer.invoke(IPC_CHANNELS.WATER_RECORD, { amount, source }),
+    getToday: () => ipcRenderer.invoke(IPC_CHANNELS.WATER_GET_TODAY),
+    getRange: (startDate: string, endDate: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WATER_GET_RANGE, { startDate, endDate }),
+    getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.WATER_GET_STREAK)
   }
 }
 

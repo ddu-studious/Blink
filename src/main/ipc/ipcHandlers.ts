@@ -12,6 +12,13 @@ import { themeService } from '../services/ThemeService'
 import { shortcutService } from '../services/ShortcutService'
 import log from 'electron-log'
 
+let onWaterRecordCallback: (() => void) | null = null
+
+/** 设置喝水记录回调（用于刷新托盘进度） */
+export function setWaterRecordCallback(callback: () => void): void {
+  onWaterRecordCallback = callback
+}
+
 /** 注册所有 IPC 处理器 */
 export function registerIpcHandlers(timerManager: TimerManager): void {
   // ---- 计时器控制 ----
@@ -108,6 +115,7 @@ export function registerIpcHandlers(timerManager: TimerManager): void {
 
   ipcMain.handle(IPC_CHANNELS.WATER_RECORD, (_, { amount, source }) => {
     statsDatabase.addWaterRecord(amount, source || 'manual')
+    onWaterRecordCallback?.()
     return statsDatabase.getWaterToday()
   })
 
