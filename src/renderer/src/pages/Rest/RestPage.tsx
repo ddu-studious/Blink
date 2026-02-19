@@ -3,7 +3,10 @@ import NatureMode from './modes/NatureMode'
 import BreathingMode from './modes/BreathingMode'
 import EyeTrainingMode from './modes/EyeTrainingMode'
 import DarkScreenMode from './modes/DarkScreenMode'
+import StretchMode from './modes/StretchMode'
+import MindfulMode from './modes/MindfulMode'
 import WaterProgressRing from './components/WaterProgressRing'
+import HealthTipCard from './components/HealthTipCard'
 
 // 护眼小知识库
 const EYE_TIPS = [
@@ -63,12 +66,13 @@ const EXERCISE_VIDEOS = [
   }
 ]
 
-type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen'
+type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen' | 'stretch' | 'mindful'
 
 interface RestPageProps {
   breakType: 'mini' | 'long'
   duration: number
   isPrimary: boolean
+  forceMode?: RestScreenMode | null
 }
 
 interface AppSettings {
@@ -91,6 +95,22 @@ interface AppSettings {
     showInBreak: boolean
     quickAmounts: number[]
   }
+  exercise?: {
+    stretchGuide: {
+      enabled: boolean
+      showInLongBreak: boolean
+    }
+  }
+  mindfulness?: {
+    mindfulGuide: {
+      enabled: boolean
+      showInLongBreak: boolean
+    }
+    healthTips: {
+      enabled: boolean
+      categories: string[]
+    }
+  }
 }
 
 interface WaterTodayStats {
@@ -98,7 +118,7 @@ interface WaterTodayStats {
   recordCount: number
 }
 
-export default function RestPage({ breakType, duration, isPrimary }: RestPageProps) {
+export default function RestPage({ breakType, duration, isPrimary, forceMode }: RestPageProps) {
   const [remaining, setRemaining] = useState(duration)
   const [showSkip, setShowSkip] = useState(false)
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -214,13 +234,23 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
   const isMini = breakType === 'mini'
   const isLong = breakType === 'long'
 
-  // 当前使用的休息模式
+  // 当前使用的休息模式（优先级: forceMode > 长休息自动模式 > 用户设置）
   const currentMode: RestScreenMode = useMemo(() => {
+    if (forceMode) return forceMode
+
     if (!settings?.reminder?.restScreen) return 'classic'
+
+    if (isLong && settings.exercise?.stretchGuide?.enabled && settings.exercise.stretchGuide.showInLongBreak) {
+      return 'stretch'
+    }
+    if (isLong && settings.mindfulness?.mindfulGuide?.enabled && settings.mindfulness.mindfulGuide.showInLongBreak) {
+      return 'mindful'
+    }
+
     return isMini
       ? settings.reminder.restScreen.miniBreakMode
       : settings.reminder.restScreen.longBreakMode
-  }, [settings, isMini])
+  }, [forceMode, settings, isMini, isLong])
 
   // 当前类别的视频列表
   const videoList = useMemo(() => {
@@ -291,6 +321,27 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+          />
+        )
+      case 'stretch':
+        return (
+          <StretchMode
+            remaining={remaining}
+            formatTime={formatTime}
+            showSkip={showSkip}
+            onSkip={handleSkip}
+            waterOverlay={waterOverlay}
+          />
+        )
+      case 'mindful':
+        return (
+          <MindfulMode
+            remaining={remaining}
+            formatTime={formatTime}
+            showSkip={showSkip}
+            onSkip={handleSkip}
+            waterOverlay={waterOverlay}
+            healthTipCategories={settings?.mindfulness?.healthTips?.categories}
           />
         )
     }
@@ -395,7 +446,11 @@ export default function RestPage({ breakType, duration, isPrimary }: RestPagePro
               <p className="text-lg text-white/80 font-light">
                 {isMini ? '望向远方，让眼睛放松一下' : '站起来活动一下身体吧'}
               </p>
-              <p className="text-sm text-white/40 max-w-sm leading-relaxed">💡 {tip}</p>
+              {settings?.mindfulness?.healthTips?.enabled ? (
+                <HealthTipCard categories={settings.mindfulness.healthTips.categories as never[]} />
+              ) : (
+                <p className="text-sm text-white/40 max-w-sm leading-relaxed">💡 {tip}</p>
+              )}
             </div>
 
             {/* 喝水进度 */}

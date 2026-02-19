@@ -17,6 +17,8 @@ const qingmouAPI = {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.TIMER_STATE),
     takeBreak: (type: 'mini' | 'long') =>
       ipcRenderer.invoke(IPC_CHANNELS.TIMER_TAKE_BREAK, type),
+    takeBreakWithMode: (type: 'mini' | 'long', mode: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TIMER_TAKE_BREAK_WITH_MODE, { type, mode }),
     onStateUpdate: (callback: (state: unknown) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
       ipcRenderer.on(IPC_CHANNELS.TIMER_STATE_UPDATE, handler)
@@ -54,6 +56,22 @@ const qingmouAPI = {
     getRange: (startDate: string, endDate: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.WATER_GET_RANGE, { startDate, endDate }),
     getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.WATER_GET_STREAK)
+  },
+
+  // ---- 运动 ----
+  exercise: {
+    record: (exerciseType: 'stand' | 'stretch' | 'mindful', exerciseName?: string, duration?: number, source?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_RECORD, { exerciseType, exerciseName, duration, source }),
+    getToday: () => ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_GET_TODAY),
+    getRange: (startDate: string, endDate: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_GET_RANGE, { startDate, endDate }),
+    getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_GET_STREAK)
+  },
+
+  // ---- 下班提醒 ----
+  workEnd: {
+    postpone: () => ipcRenderer.invoke(IPC_CHANNELS.WORK_END_POSTPONE),
+    dismiss: () => ipcRenderer.invoke(IPC_CHANNELS.WORK_END_DISMISS)
   }
 }
 

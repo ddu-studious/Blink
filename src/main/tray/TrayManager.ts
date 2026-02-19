@@ -4,7 +4,7 @@
 
 import { Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
-import { TimerState, TimerStatus } from '../types'
+import { RestScreenMode, TimerState, TimerStatus } from '../types'
 import log from 'electron-log'
 
 // 托盘菜单操作回调
@@ -13,12 +13,14 @@ export interface TrayCallbacks {
   onPause: () => void
   onResume: () => void
   onTakeBreak: () => void
+  onTakeBreakWithMode?: (type: 'mini' | 'long', mode: RestScreenMode) => void
   onSkipToNext: () => void
   onShowSettings: () => void
   onShowDashboard: () => void
   onShowAbout: () => void
   onQuit: () => void
   onRecordWater?: (amount: number) => void
+  onToggleWaterReminder?: () => void
 }
 
 export interface WaterProgress {
@@ -119,6 +121,7 @@ export class TrayManager {
   private callbacks: TrayCallbacks
   private waterProgress: WaterProgress = { totalMl: 0, dailyGoal: 2000 }
   private waterEnabled: boolean = true
+  private waterIndependentReminder: boolean = false
 
   constructor(callbacks: TrayCallbacks) {
     this.callbacks = callbacks
@@ -203,6 +206,35 @@ export class TrayManager {
         click: () => this.callbacks.onTakeBreak(),
         enabled: isRunning
       },
+      ...(this.callbacks.onTakeBreakWithMode
+        ? [
+            {
+              label: '🧘 健康活动',
+              submenu: [
+                {
+                  label: '💪 立即拉伸',
+                  click: () => this.callbacks.onTakeBreakWithMode!('long', 'stretch'),
+                  enabled: isRunning || isIdle
+                },
+                {
+                  label: '🕊️ 正念时刻',
+                  click: () => this.callbacks.onTakeBreakWithMode!('long', 'mindful'),
+                  enabled: isRunning || isIdle
+                },
+                {
+                  label: '🫁 呼吸练习',
+                  click: () => this.callbacks.onTakeBreakWithMode!('mini', 'breathing'),
+                  enabled: isRunning || isIdle
+                },
+                {
+                  label: '👁️ 眼部训练',
+                  click: () => this.callbacks.onTakeBreakWithMode!('mini', 'eyeTraining'),
+                  enabled: isRunning || isIdle
+                }
+              ]
+            } as Electron.MenuItemConstructorOptions
+          ]
+        : []),
       { type: 'separator' },
       ...(this.waterEnabled && this.callbacks.onRecordWater
         ? [
@@ -217,6 +249,10 @@ export class TrayManager {
             {
               label: `💧 今日: ${this.waterProgress.totalMl}/${this.waterProgress.dailyGoal}ml`,
               enabled: false
+            } as Electron.MenuItemConstructorOptions,
+            {
+              label: this.waterIndependentReminder ? '🔔 定时提醒: 开启' : '🔕 定时提醒: 关闭',
+              click: () => this.callbacks.onToggleWaterReminder?.()
             } as Electron.MenuItemConstructorOptions,
             { type: 'separator' as const } as Electron.MenuItemConstructorOptions
           ]
@@ -326,6 +362,11 @@ export class TrayManager {
   /** 设置喝水功能启用状态 */
   setWaterEnabled(enabled: boolean): void {
     this.waterEnabled = enabled
+  }
+
+  /** 设置独立喝水提醒状态 */
+  setWaterIndependentReminder(enabled: boolean): void {
+    this.waterIndependentReminder = enabled
   }
 
   /** 销毁托盘 */

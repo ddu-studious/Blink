@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 
 // ---- 类型定义 ----
 
-type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen'
+type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen' | 'stretch' | 'mindful'
+type HealthTipCategory = 'eye' | 'posture' | 'water' | 'exercise' | 'mindful'
 type AmbientSoundType = 'birds' | 'stream' | 'waves' | 'wind' | 'rain'
 
 interface ShortcutSettings {
@@ -18,6 +19,37 @@ interface WaterSettings {
   showInBreak: boolean
   independentReminder: boolean
   reminderInterval: number
+}
+
+interface ExerciseSettings {
+  sedentaryReminder: {
+    enabled: boolean
+    threshold: number
+  }
+  standReminder: {
+    enabled: boolean
+    interval: number
+  }
+  stretchGuide: {
+    enabled: boolean
+    showInLongBreak: boolean
+  }
+}
+
+interface MindfulnessSettings {
+  mindfulGuide: {
+    enabled: boolean
+    showInLongBreak: boolean
+  }
+  healthTips: {
+    enabled: boolean
+    categories: HealthTipCategory[]
+  }
+  workEndReminder: {
+    enabled: boolean
+    time: string
+    postponeMinutes: number
+  }
 }
 
 interface Settings {
@@ -44,6 +76,7 @@ interface Settings {
   smart: {
     idleDetectionEnabled: boolean
     idleThreshold: number
+    mediaActivityDetection: boolean
     dndAware: boolean
     fullscreenDetection: boolean
     strictMode: boolean
@@ -55,14 +88,18 @@ interface Settings {
     }
   }
   water: WaterSettings
+  exercise: ExerciseSettings
+  mindfulness: MindfulnessSettings
 }
 
-type TabType = 'reminder' | 'water' | 'appearance' | 'smart' | 'restScreen' | 'shortcuts' | 'general' | 'about'
+type TabType = 'reminder' | 'water' | 'exercise' | 'mindfulness' | 'appearance' | 'smart' | 'restScreen' | 'shortcuts' | 'general' | 'about'
 
 // 侧边栏导航配置（含搜索关键词）
 const NAV_ITEMS: { key: TabType; label: string; icon: string; gradient: string; keywords: string[] }[] = [
   { key: 'reminder', label: '提醒', icon: '🔔', gradient: 'from-blue-400 to-blue-600', keywords: ['提醒', '短休息', '长休息', 'mini', 'long', 'break', '间隔', '时长', '声音', '通知', '音量', '跳过'] },
   { key: 'water', label: '喝水', icon: '💧', gradient: 'from-cyan-400 to-blue-500', keywords: ['喝水', '饮水', 'water', '水量', '杯', '目标', 'ml', '提醒'] },
+  { key: 'exercise', label: '运动健康', icon: '🏃', gradient: 'from-green-400 to-emerald-500', keywords: ['运动', '健康', '久坐', '站立', '拉伸', 'exercise', 'sedentary', 'stand', 'stretch'] },
+  { key: 'mindfulness', label: '正念专注', icon: '🧘', gradient: 'from-violet-400 to-purple-600', keywords: ['正念', '冥想', '专注', '知识', '卡片', '下班', 'mindful', 'focus', 'health tips'] },
   { key: 'appearance', label: '外观', icon: '🎨', gradient: 'from-orange-400 to-orange-600', keywords: ['外观', '主题', '深色', '浅色', '暗色', '亮色', 'theme', 'dark', 'light', '语言', 'language'] },
   { key: 'smart', label: '智能', icon: '🧠', gradient: 'from-purple-400 to-purple-600', keywords: ['智能', '空闲', 'idle', '免打扰', '全屏', '严格', '工作时段', '时间'] },
   { key: 'restScreen', label: '休息屏幕', icon: '🌿', gradient: 'from-teal-400 to-teal-600', keywords: ['休息', '屏幕', '自然', '呼吸', '眼部', '训练', '暗屏', '音效', '环境音'] },
@@ -128,6 +165,29 @@ export default function SettingsPage() {
           showInBreak: true,
           independentReminder: false,
           reminderInterval: 90
+        }
+      }
+      if (!s.exercise) {
+        s.exercise = {
+          sedentaryReminder: {
+            enabled: true,
+            threshold: 30
+          },
+          standReminder: {
+            enabled: true,
+            interval: 60
+          },
+          stretchGuide: {
+            enabled: true,
+            showInLongBreak: true
+          }
+        }
+      }
+      if (!s.mindfulness) {
+        s.mindfulness = {
+          mindfulGuide: { enabled: true, showInLongBreak: true },
+          healthTips: { enabled: true, categories: ['eye', 'posture', 'water', 'exercise', 'mindful'] },
+          workEndReminder: { enabled: true, time: '18:00', postponeMinutes: 30 }
         }
       }
       setSettings(s)
@@ -231,6 +291,8 @@ export default function SettingsPage() {
 
         {activeTab === 'reminder' && <ReminderSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'water' && <WaterSection settings={settings} onSave={saveSettings} />}
+        {activeTab === 'exercise' && <ExerciseSection settings={settings} onSave={saveSettings} />}
+        {activeTab === 'mindfulness' && <MindfulnessSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'appearance' && <AppearanceSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'smart' && <SmartSection settings={settings} onSave={saveSettings} />}
         {activeTab === 'restScreen' && <RestScreenSection settings={settings} onSave={saveSettings} />}
@@ -463,6 +525,287 @@ function WaterSection({ settings, onSave }: { settings: Settings; onSave: (s: Pa
 }
 
 // ========================================================
+// 运动健康设置
+// ========================================================
+function ExerciseSection({ settings, onSave }: { settings: Settings; onSave: (s: Partial<Settings>) => void }) {
+  const { exercise } = settings
+
+  const updateExercise = (path: string[], value: boolean | number) => {
+    const newExercise = { ...exercise }
+    let current: any = newExercise
+    for (let i = 0; i < path.length - 1; i++) {
+      current = current[path[i]] = { ...current[path[i]] }
+    }
+    current[path[path.length - 1]] = value
+    onSave({ exercise: newExercise })
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mb-4">运动健康</h2>
+
+      {/* 久坐提醒 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="🪑" bg="bg-orange-100 dark:bg-orange-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">久坐提醒</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">连续使用超过阈值时提醒站立</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={exercise.sedentaryReminder.enabled}
+            onChange={(v) => updateExercise(['sedentaryReminder', 'enabled'], v)}
+          />
+        </CardRow>
+        {exercise.sedentaryReminder.enabled && (
+          <>
+            <CardDividerThin />
+            <CardRow>
+              <span className="text-[13px] text-gray-600 dark:text-gray-400">久坐阈值</span>
+              <InlineSlider
+                value={exercise.sedentaryReminder.threshold}
+                min={15}
+                max={60}
+                step={5}
+                unit="分钟"
+                color="accent-orange-500"
+                onChange={(v) => updateExercise(['sedentaryReminder', 'threshold'], v)}
+              />
+            </CardRow>
+          </>
+        )}
+      </Card>
+
+      {/* 站立提醒 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="🏃" bg="bg-green-100 dark:bg-green-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">站立提醒</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">定期建议起身活动</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={exercise.standReminder.enabled}
+            onChange={(v) => updateExercise(['standReminder', 'enabled'], v)}
+          />
+        </CardRow>
+        {exercise.standReminder.enabled && (
+          <>
+            <CardDividerThin />
+            <CardRow>
+              <span className="text-[13px] text-gray-600 dark:text-gray-400">站立提醒间隔</span>
+              <InlineSlider
+                value={exercise.standReminder.interval}
+                min={30}
+                max={120}
+                step={15}
+                unit="分钟"
+                color="accent-green-500"
+                onChange={(v) => updateExercise(['standReminder', 'interval'], v)}
+              />
+            </CardRow>
+          </>
+        )}
+      </Card>
+
+      {/* 拉伸引导 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="🧘" bg="bg-purple-100 dark:bg-purple-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">拉伸引导</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">长休息时显示拉伸动作引导</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={exercise.stretchGuide.enabled}
+            onChange={(v) => updateExercise(['stretchGuide', 'enabled'], v)}
+          />
+        </CardRow>
+        {exercise.stretchGuide.enabled && (
+          <>
+            <CardDividerThin />
+            <CardRow>
+              <div>
+                <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">长休息时显示</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">在 Long Break 时自动展示拉伸引导</p>
+              </div>
+              <AppleToggle
+                checked={exercise.stretchGuide.showInLongBreak}
+                onChange={(v) => updateExercise(['stretchGuide', 'showInLongBreak'], v)}
+              />
+            </CardRow>
+          </>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ========================================================
+// 正念与专注设置
+// ========================================================
+
+const ALL_TIP_CATEGORIES: { value: HealthTipCategory; label: string; icon: string }[] = [
+  { value: 'eye', label: '护眼', icon: '👁️' },
+  { value: 'posture', label: '姿势', icon: '🪑' },
+  { value: 'water', label: '饮水', icon: '💧' },
+  { value: 'exercise', label: '运动', icon: '🏃' },
+  { value: 'mindful', label: '正念', icon: '🧘' }
+]
+
+function MindfulnessSection({ settings, onSave }: { settings: Settings; onSave: (s: Partial<Settings>) => void }) {
+  const { mindfulness } = settings
+
+  const updateMindfulness = (path: string[], value: boolean | number | string | string[]) => {
+    const newMindfulness = { ...mindfulness }
+    let current: Record<string, unknown> = newMindfulness
+    for (let i = 0; i < path.length - 1; i++) {
+      current = current[path[i]] = { ...(current[path[i]] as Record<string, unknown>) }
+    }
+    current[path[path.length - 1]] = value
+    onSave({ mindfulness: newMindfulness as MindfulnessSettings })
+  }
+
+  const toggleCategory = (cat: HealthTipCategory) => {
+    const cats = mindfulness.healthTips.categories
+    const newCats = cats.includes(cat) ? cats.filter((c) => c !== cat) : [...cats, cat]
+    if (newCats.length === 0) return
+    updateMindfulness(['healthTips', 'categories'], newCats)
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mb-4">正念与专注</h2>
+
+      {/* 正念引导 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="🧘" bg="bg-violet-100 dark:bg-violet-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">正念引导</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">长休息时提供引导式正念练习</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={mindfulness.mindfulGuide.enabled}
+            onChange={(v) => updateMindfulness(['mindfulGuide', 'enabled'], v)}
+          />
+        </CardRow>
+        {mindfulness.mindfulGuide.enabled && (
+          <>
+            <CardDividerThin />
+            <CardRow>
+              <div>
+                <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">长休息时显示</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">在 Long Break 时自动展示正念引导</p>
+              </div>
+              <AppleToggle
+                checked={mindfulness.mindfulGuide.showInLongBreak}
+                onChange={(v) => updateMindfulness(['mindfulGuide', 'showInLongBreak'], v)}
+              />
+            </CardRow>
+          </>
+        )}
+      </Card>
+
+      {/* 健康知识卡片 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="💡" bg="bg-amber-100 dark:bg-amber-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">健康知识卡片</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">休息时展示健康小贴士</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={mindfulness.healthTips.enabled}
+            onChange={(v) => updateMindfulness(['healthTips', 'enabled'], v)}
+          />
+        </CardRow>
+        {mindfulness.healthTips.enabled && (
+          <>
+            <CardDivider />
+            <div className="px-4 py-3">
+              <p className="text-[13px] text-gray-600 dark:text-gray-400 mb-2.5">卡片分类</p>
+              <div className="flex flex-wrap gap-2">
+                {ALL_TIP_CATEGORIES.map((cat) => {
+                  const active = mindfulness.healthTips.categories.includes(cat.value)
+                  return (
+                    <button
+                      key={cat.value}
+                      onClick={() => toggleCategory(cat.value)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                        active
+                          ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-700'
+                          : 'bg-gray-100 dark:bg-[#333] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#444] hover:border-gray-300'
+                      }`}
+                    >
+                      {cat.icon} {cat.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* 下班提醒 */}
+      <Card>
+        <CardRow>
+          <div className="flex items-center gap-3">
+            <IconBox icon="🌙" bg="bg-indigo-100 dark:bg-indigo-900/50" />
+            <div>
+              <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">下班提醒</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">到达下班时间时友好提醒</p>
+            </div>
+          </div>
+          <AppleToggle
+            checked={mindfulness.workEndReminder.enabled}
+            onChange={(v) => updateMindfulness(['workEndReminder', 'enabled'], v)}
+          />
+        </CardRow>
+        {mindfulness.workEndReminder.enabled && (
+          <>
+            <CardDivider />
+            <CardRow>
+              <span className="text-[13px] text-gray-600 dark:text-gray-400">下班时间</span>
+              <input
+                type="time"
+                value={mindfulness.workEndReminder.time}
+                onChange={(e) => updateMindfulness(['workEndReminder', 'time'], e.target.value)}
+                className="text-[12px] bg-gray-100 dark:bg-[#333] border-0 rounded-lg px-3 py-1.5 text-gray-700 dark:text-gray-300"
+              />
+            </CardRow>
+            <CardDividerThin />
+            <CardRow>
+              <span className="text-[13px] text-gray-600 dark:text-gray-400">延后间隔</span>
+              <InlineSlider
+                value={mindfulness.workEndReminder.postponeMinutes}
+                min={10}
+                max={60}
+                step={5}
+                unit="分钟"
+                color="accent-indigo-500"
+                onChange={(v) => updateMindfulness(['workEndReminder', 'postponeMinutes'], v)}
+              />
+            </CardRow>
+          </>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ========================================================
 // 外观设置
 // ========================================================
 function AppearanceSection({ settings, onSave }: { settings: Settings; onSave: (s: Partial<Settings>) => void }) {
@@ -564,6 +907,14 @@ function SmartSection({ settings, onSave }: { settings: Settings; onSave: (s: Pa
               <span className="text-[13px] text-gray-600 dark:text-gray-400">空闲阈值</span>
               <InlineSlider value={smart.idleThreshold} min={1} max={15} step={1} unit="分钟" onChange={(v) => update('idleThreshold', v)} />
             </CardRow>
+            <CardDividerThin />
+            <CardRow>
+              <div>
+                <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">媒体活动检测</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">看视频/开会时不暂停计时（检测防休眠断言）</p>
+              </div>
+              <AppleToggle checked={smart.mediaActivityDetection ?? true} onChange={(v) => update('mediaActivityDetection', v)} />
+            </CardRow>
           </>
         )}
         <CardDivider />
@@ -664,6 +1015,8 @@ function SmartSection({ settings, onSave }: { settings: Settings; onSave: (s: Pa
 // ========================================================
 
 const REST_MODES: { value: RestScreenMode; label: string; desc: string; previewGradient: string; previewIcon: string }[] = [
+  { value: 'stretch', label: '拉伸引导', desc: '展示办公室拉伸动作', previewGradient: 'from-purple-500 to-pink-500', previewIcon: '💪' },
+  { value: 'mindful', label: '正念引导', desc: '引导式正念练习', previewGradient: 'from-violet-800 to-indigo-900', previewIcon: '🕊️' },
   { value: 'classic', label: '经典模式', desc: '倒计时+提示', previewGradient: 'from-gray-900 to-gray-800', previewIcon: ':20' },
   { value: 'nature', label: '自然风光', desc: '沉浸放松', previewGradient: 'from-green-800 to-green-600', previewIcon: '🌲' },
   { value: 'breathing', label: '呼吸引导', desc: '减压冥想', previewGradient: 'from-slate-900 to-gray-900', previewIcon: '' },
@@ -700,7 +1053,7 @@ function RestScreenSection({ settings, onSave }: { settings: Settings; onSave: (
         </div>
         <CardDivider />
         <div className="px-4 py-3">
-          <div className="grid grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-4 gap-2.5">
             {REST_MODES.map((mode) => (
               <ModeCard
                 key={mode.value}
@@ -721,7 +1074,7 @@ function RestScreenSection({ settings, onSave }: { settings: Settings; onSave: (
         </div>
         <CardDivider />
         <div className="px-4 py-3">
-          <div className="grid grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-4 gap-2.5">
             {REST_MODES.map((mode) => (
               <ModeCard
                 key={mode.value}
@@ -791,6 +1144,7 @@ function ModeCard({
             </div>
           )}
           {mode.value === 'nature' && <span className="text-xl z-10">{mode.previewIcon}</span>}
+          {mode.value === 'mindful' && <span className="text-xl">{mode.previewIcon}</span>}
           {mode.value === 'breathing' && (
             <div className="w-8 h-8 rounded-full bg-teal-400/20 border border-teal-400/30 flex items-center justify-center">
               <div className="w-4 h-4 rounded-full bg-teal-400/30" />

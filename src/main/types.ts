@@ -21,7 +21,7 @@ export type NotificationMode = 'overlay' | 'notification' | 'both'
 export type Language = 'zh-CN' | 'en-US'
 
 /** 休息屏幕模式 */
-export type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen'
+export type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen' | 'stretch' | 'mindful'
 
 /** 环境音效类型 */
 export type AmbientSoundType = 'birds' | 'stream' | 'waves' | 'wind' | 'rain'
@@ -81,6 +81,7 @@ export interface WorkSchedule {
 export interface SmartSettings {
   idleDetectionEnabled: boolean
   idleThreshold: number // 分钟 (1-15, 默认 5)
+  mediaActivityDetection: boolean // 检测媒体活动（视频/会议），防止误判空闲
   dndAware: boolean
   fullscreenDetection: boolean
   strictMode: boolean
@@ -97,11 +98,49 @@ export interface WaterReminderSettings {
   reminderInterval: number // 独立提醒间隔分钟, 默认 90
 }
 
+/** 运动健康设置 */
+export interface ExerciseSettings {
+  sedentaryReminder: {
+    enabled: boolean // 默认 true
+    threshold: number // 分钟，默认 30
+  }
+  standReminder: {
+    enabled: boolean // 默认 true
+    interval: number // 分钟，默认 60
+  }
+  stretchGuide: {
+    enabled: boolean // 默认 true
+    showInLongBreak: boolean // 默认 true
+  }
+}
+
+/** 健康知识卡片分类 */
+export type HealthTipCategory = 'eye' | 'posture' | 'water' | 'exercise' | 'mindful'
+
+/** 正念与专注设置 */
+export interface MindfulnessSettings {
+  mindfulGuide: {
+    enabled: boolean // 默认 true
+    showInLongBreak: boolean // 默认 true
+  }
+  healthTips: {
+    enabled: boolean // 默认 true
+    categories: HealthTipCategory[] // 默认全选
+  }
+  workEndReminder: {
+    enabled: boolean // 默认 true
+    time: string // 默认 "18:00"
+    postponeMinutes: number // 延后分钟数，默认 30
+  }
+}
+
 export interface AppSettings {
   general: GeneralSettings
   reminder: ReminderSettings
   smart: SmartSettings
   water: WaterReminderSettings
+  exercise: ExerciseSettings
+  mindfulness: MindfulnessSettings
   firstRun: boolean
 }
 
@@ -135,6 +174,7 @@ export const IPC_CHANNELS = {
   TIMER_RESET: 'timer:reset',
   TIMER_SKIP: 'timer:skip',
   TIMER_TAKE_BREAK: 'timer:take-break',
+  TIMER_TAKE_BREAK_WITH_MODE: 'timer:take-break-with-mode',
   TIMER_STATE: 'timer:state',
   TIMER_STATE_UPDATE: 'timer:state-update',
 
@@ -157,6 +197,17 @@ export const IPC_CHANNELS = {
   WATER_GET_TODAY: 'water:get-today',
   WATER_GET_RANGE: 'water:get-range',
   WATER_GET_STREAK: 'water:get-streak',
+
+  // 运动
+  EXERCISE_RECORD: 'exercise:record',
+  EXERCISE_GET_TODAY: 'exercise:get-today',
+  EXERCISE_GET_RANGE: 'exercise:get-range',
+  EXERCISE_GET_STREAK: 'exercise:get-streak',
+
+  // 正念 / 健康卡片 / 下班提醒
+  WORK_END_CHECK: 'workEnd:check',
+  WORK_END_POSTPONE: 'workEnd:postpone',
+  WORK_END_DISMISS: 'workEnd:dismiss',
 
   // 应用
   APP_QUIT: 'app:quit',
@@ -207,6 +258,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   smart: {
     idleDetectionEnabled: true,
     idleThreshold: 5,
+    mediaActivityDetection: true,
     dndAware: true,
     fullscreenDetection: true,
     strictMode: false,
@@ -224,6 +276,35 @@ export const DEFAULT_SETTINGS: AppSettings = {
     showInBreak: true,
     independentReminder: false,
     reminderInterval: 90
+  },
+  exercise: {
+    sedentaryReminder: {
+      enabled: true,
+      threshold: 30
+    },
+    standReminder: {
+      enabled: true,
+      interval: 60
+    },
+    stretchGuide: {
+      enabled: true,
+      showInLongBreak: true
+    }
+  },
+  mindfulness: {
+    mindfulGuide: {
+      enabled: true,
+      showInLongBreak: true
+    },
+    healthTips: {
+      enabled: true,
+      categories: ['eye', 'posture', 'water', 'exercise', 'mindful']
+    },
+    workEndReminder: {
+      enabled: true,
+      time: '18:00',
+      postponeMinutes: 30
+    }
   },
   firstRun: true
 }

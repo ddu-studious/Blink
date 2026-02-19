@@ -15,14 +15,18 @@ import { PowerMonitorService } from './monitor/PowerMonitor'
 import { IdleDetector } from './monitor/IdleDetector'
 import { DndDetector } from './monitor/DndDetector'
 import { FullscreenDetector } from './monitor/FullscreenDetector'
+import { SedentaryDetector } from './monitor/SedentaryDetector'
+import { WorkEndReminder } from './monitor/WorkEndReminder'
+import { WaterReminder } from './monitor/WaterReminder'
+import { StandReminder } from './monitor/StandReminder'
 import { settingsStore } from './store/SettingsStore'
 import { statsDatabase } from './store/StatsDatabase'
-import { registerIpcHandlers, broadcastTimerState, setWaterRecordCallback } from './ipc/ipcHandlers'
+import { registerIpcHandlers, broadcastTimerState, setWaterRecordCallback, setWorkEndReminder, setWaterReminder } from './ipc/ipcHandlers'
 import { autoLaunchService } from './services/AutoLaunchService'
 import { soundService } from './services/SoundService'
 import { shortcutService } from './services/ShortcutService'
 import { themeService } from './services/ThemeService'
-import { BreakType, TimerState } from './types'
+import { BreakType, RestScreenMode, TimerState } from './types'
 
 // ---- 日志配置 ----
 log.transports.file.level = 'info'
@@ -37,6 +41,11 @@ let powerMonitorService: PowerMonitorService
 let idleDetector: IdleDetector
 let dndDetector: DndDetector
 let fullscreenDetector: FullscreenDetector
+let sedentaryDetector: SedentaryDetector
+let workEndReminder: WorkEndReminder
+let waterReminder: WaterReminder
+let standReminder: StandReminder
+let timerWatchdog: NodeJS.Timeout | null = null
 
 /** 初始化所有模块 */
 function initModules(): void {
@@ -58,12 +67,32 @@ function initModules(): void {
     onPause: () => timerManager.pause(),
     onResume: () => timerManager.resume(),
     onTakeBreak: () => timerManager.takeBreakNow('mini'),
+    onTakeBreakWithMode: (type, mode) => {
+      if (timerManager.getState().status === 'idle') {
+        timerManager.start()
+      }
+      timerManager.takeBreakNow(type, mode)
+    },
     onSkipToNext: () => timerManager.skipBreak(),
     onShowSettings: () => windowManager.showSettings(),
     onShowDashboard: () => windowManager.showDashboard(),
     onRecordWater: (amount: number) => {
       statsDatabase.addWaterRecord(amount, 'tray')
       refreshWaterProgress()
+      waterReminder?.resetTimer()
+    },
+    onToggleWaterReminder: () => {
+      const waterSettings = settingsStore.get('water')
+      const newValue = !waterSettings.independentReminder
+      settingsStore.set('water', { ...waterSettings, independentReminder: newValue })
+      if (newValue) {
+        waterReminder?.start()
+      } else {
+        waterReminder?.stop()
+        waterReminder?.start()
+      }
+      refreshWaterProgress()
+      log.info(`[Main] 喝水定时提醒已${newValue ? '开启' : '关闭'}`)
     },
     onShowAbout: () => {
       // 加载应用图标
@@ -105,11 +134,25 @@ function initModules(): void {
   // 8.5 初始化全屏应用检测
   fullscreenDetector = new FullscreenDetector()
 
+  // 8.6 初始化久坐检测
+  sedentaryDetector = new SedentaryDetector()
+
+  // 8.7 初始化下班提醒
+  workEndReminder = new WorkEndReminder()
+
+  // 8.8 初始化独立喝水提醒
+  waterReminder = new WaterReminder()
+
+  // 8.9 初始化站立提醒
+  standReminder = new StandReminder()
+
   // 9. 初始化主题服务
   themeService.init()
 
   // 10. 注册 IPC 处理器
   registerIpcHandlers(timerManager)
+  setWorkEndReminder(workEndReminder)
+  setWaterReminder(waterReminder)
 
   // 10. 注册全局快捷键
   shortcutService.register({
@@ -150,11 +193,11 @@ function initModules(): void {
   })
 
   // 休息开始 → 显示覆盖窗口 + 系统通知 + 声音提示
-  timerManager.on('break-start', ({ type, duration }: { type: BreakType; duration: number }) => {
+  timerManager.on('break-start', ({ type, duration, forceMode }: { type: BreakType; duration: number; forceMode?: RestScreenMode }) => {
     const settings = settingsStore.getAll()
 
     if (settings.reminder.notificationMode === 'overlay' || settings.reminder.notificationMode === 'both') {
-      overlayManager.show(type, duration)
+      overlayManager.show(type, duration, forceMode)
     }
 
     if (settings.reminder.notificationMode === 'notification' || settings.reminder.notificationMode === 'both') {
@@ -175,35 +218,69 @@ function initModules(): void {
     soundService.play('break-end')
   })
 
-  // 电源事件 → 计时器暂停/恢复
+  // 电源事件 → 计时器暂停/恢复（独立暂停源）
   powerMonitorService.on('suspend', () => timerManager.handleSuspend())
   powerMonitorService.on('resume', () => timerManager.handleResume())
-  powerMonitorService.on('lock-screen', () => timerManager.handleSuspend())
-  powerMonitorService.on('unlock-screen', () => timerManager.handleResume())
+  powerMonitorService.on('lock-screen', () => timerManager.handleLockScreen())
+  powerMonitorService.on('unlock-screen', () => timerManager.handleUnlockScreen())
 
-  // 空闲检测 → 计时器暂停/恢复
+  // 空闲检测 → 计时器暂停/恢复（已集成媒体活动检测）
   idleDetector.on('idle', (isIdle: boolean) => timerManager.handleIdle(isIdle))
 
   // 免打扰检测 → 计时器暂停/恢复
   dndDetector.on('dnd-change', (isDnd: boolean) => {
-    if (isDnd) {
-      timerManager.handleSuspend()
-      log.info('[Main] 免打扰模式开启，暂停计时')
-    } else {
-      timerManager.handleResume()
-      log.info('[Main] 免打扰模式关闭，恢复计时')
-    }
+    timerManager.handleDnd(isDnd)
+    log.info(`[Main] 免打扰模式${isDnd ? '开启' : '关闭'}`)
   })
 
   // 全屏应用检测 → 计时器暂停/恢复
   fullscreenDetector.on('fullscreen-change', (isFullscreen: boolean) => {
-    if (isFullscreen) {
-      timerManager.handleSuspend()
-      log.info('[Main] 检测到全屏应用，暂停计时')
-    } else {
-      timerManager.handleResume()
-      log.info('[Main] 全屏应用退出，恢复计时')
+    timerManager.handleFullscreen(isFullscreen)
+    log.info(`[Main] 全屏应用${isFullscreen ? '检测到' : '已退出'}`)
+  })
+
+  // 久坐检测 → 显示通知提醒
+  sedentaryDetector.on('sedentary', ({ duration }: { duration: number }) => {
+    if (duration > 0) {
+      log.info(`[Main] 久坐提醒已触发 (连续使用 ${Math.floor(duration / 60)} 分钟)`)
     }
+  })
+
+  // 久坐通知点击 → 打开拉伸引导
+  sedentaryDetector.on('sedentary-action-requested', () => {
+    log.info('[Main] 用户点击久坐通知，触发拉伸引导')
+    if (timerManager.getState().status === 'idle') {
+      timerManager.start()
+    }
+    timerManager.takeBreakNow('long', 'stretch')
+  })
+
+  // 下班提醒
+  workEndReminder.on('work-end', () => {
+    log.info('[Main] 下班提醒已触发')
+  })
+
+  // 下班通知点击 → 打开正念引导
+  workEndReminder.on('work-end-action-requested', () => {
+    log.info('[Main] 用户点击下班通知，触发正念引导')
+    if (timerManager.getState().status === 'idle') {
+      timerManager.start()
+    }
+    timerManager.takeBreakNow('long', 'mindful')
+  })
+
+  // 喝水提醒通知点击 → 打开统计页
+  waterReminder.on('water-reminder-clicked', () => {
+    windowManager.showDashboard()
+  })
+
+  // 站立提醒点击 → 打开拉伸引导
+  standReminder.on('stand-reminder-clicked', () => {
+    log.info('[Main] 用户点击站立通知，触发拉伸引导')
+    if (timerManager.getState().status === 'idle') {
+      timerManager.start()
+    }
+    timerManager.takeBreakNow('long', 'stretch')
   })
 
   // 初始化喝水进度 & 注册 IPC 回调
@@ -217,6 +294,7 @@ function initModules(): void {
 function refreshWaterProgress(): void {
   const waterSettings = settingsStore.get('water')
   trayManager.setWaterEnabled(waterSettings.enabled)
+  trayManager.setWaterIndependentReminder(waterSettings.independentReminder)
   if (waterSettings.enabled) {
     const todayWater = statsDatabase.getWaterToday()
     trayManager.updateWaterProgress({
@@ -238,6 +316,10 @@ async function initAutoLaunch(): Promise<void> {
 
 /** 清理资源 */
 function cleanup(): void {
+  if (timerWatchdog) {
+    clearInterval(timerWatchdog)
+    timerWatchdog = null
+  }
   timerManager?.destroy()
   trayManager?.destroy()
   overlayManager?.destroy()
@@ -246,6 +328,10 @@ function cleanup(): void {
   idleDetector?.destroy()
   dndDetector?.destroy()
   fullscreenDetector?.destroy()
+  sedentaryDetector?.destroy()
+  workEndReminder?.destroy()
+  waterReminder?.destroy()
+  standReminder?.destroy()
   shortcutService?.destroy()
   statsDatabase?.close()
   log.info('[Main] 资源清理完成')
@@ -289,6 +375,18 @@ app.whenReady().then(async () => {
   // 启动全屏应用检测
   fullscreenDetector.start()
 
+  // 启动久坐检测
+  sedentaryDetector.start()
+
+  // 启动下班提醒
+  workEndReminder.start()
+
+  // 启动独立喝水提醒
+  waterReminder.start()
+
+  // 启动站立提醒
+  standReminder.start()
+
   // 初始化开机自启动
   await initAutoLaunch()
 
@@ -301,6 +399,11 @@ app.whenReady().then(async () => {
 
   // 自动开始计时
   timerManager.start()
+
+  // 启动计时器保活 watchdog（每 60 秒检查一次）
+  timerWatchdog = setInterval(() => {
+    timerManager.ensureRunning()
+  }, 60000)
 
   log.info('[Main] 青眸已启动')
 

@@ -11,6 +11,14 @@ interface WaterSettings {
   quickAmounts: number[]
 }
 
+interface ExerciseDailyStats {
+  date: string
+  standCount: number
+  stretchCount: number
+  mindfulCount: number
+  totalDuration: number
+}
+
 interface TodayStats {
   date: string
   miniBreaksCompleted: number
@@ -40,6 +48,8 @@ export default function DashboardPage() {
   const [waterStats, setWaterStats] = useState<WaterDailyStats | null>(null)
   const [waterStreak, setWaterStreak] = useState(0)
   const [waterSettings, setWaterSettings] = useState<WaterSettings | null>(null)
+  const [exerciseStats, setExerciseStats] = useState<ExerciseDailyStats | null>(null)
+  const [exerciseStreak, setExerciseStreak] = useState(0)
 
   const refreshWater = useCallback(() => {
     window.api.water.getToday().then(setWaterStats)
@@ -51,7 +61,13 @@ export default function DashboardPage() {
     window.api.stats.getToday().then(setStats)
 
     // 获取计时器状态
-    window.api.timer.getState().then(setTimerState)
+    window.api.timer.getState().then((state) => {
+      setTimerState(state as TimerState)
+      // 如果状态是 idle，自动启动计时器
+      if (state.status === 'idle') {
+        window.api.timer.start()
+      }
+    })
 
     // 获取连续天数
     window.api.stats.getStreak().then(setStreak)
@@ -66,6 +82,10 @@ export default function DashboardPage() {
     // 加载喝水数据
     window.api.settings.get().then((s: { water: WaterSettings }) => setWaterSettings(s.water))
     refreshWater()
+
+    // 加载运动数据
+    window.api.exercise.getToday().then(setExerciseStats)
+    window.api.exercise.getStreak().then(setExerciseStreak)
 
     // 监听状态更新
     const cleanup = window.api.timer.onStateUpdate((state) => {
@@ -141,6 +161,8 @@ export default function DashboardPage() {
           waterStats={waterStats}
           waterStreak={waterStreak}
           waterSettings={waterSettings}
+          exerciseStats={exerciseStats}
+          exerciseStreak={exerciseStreak}
           onRecordWater={(amount) => {
             window.api.water.record(amount, 'manual').then(() => refreshWater())
           }}
@@ -177,6 +199,37 @@ export default function DashboardPage() {
           立即休息
         </button>
       </div>
+
+      {/* 快速体验 */}
+      <div className="mt-4">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">🧘 快速体验</p>
+        <div className="grid grid-cols-4 gap-2">
+          <button
+            onClick={() => window.api.timer.takeBreakWithMode('long', 'stretch')}
+            className="py-2 rounded-lg text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-100 dark:border-purple-800/30 transition-colors"
+          >
+            💪 拉伸
+          </button>
+          <button
+            onClick={() => window.api.timer.takeBreakWithMode('long', 'mindful')}
+            className="py-2 rounded-lg text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 border border-violet-100 dark:border-violet-800/30 transition-colors"
+          >
+            🕊️ 正念
+          </button>
+          <button
+            onClick={() => window.api.timer.takeBreakWithMode('mini', 'breathing')}
+            className="py-2 rounded-lg text-xs font-medium bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-slate-100 dark:border-slate-700/30 transition-colors"
+          >
+            🫁 呼吸
+          </button>
+          <button
+            onClick={() => window.api.timer.takeBreakWithMode('mini', 'eyeTraining')}
+            className="py-2 rounded-lg text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-800/30 transition-colors"
+          >
+            👁️ 护眼
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -192,6 +245,8 @@ function TodayView({
   waterStats,
   waterStreak,
   waterSettings,
+  exerciseStats,
+  exerciseStreak,
   onRecordWater
 }: {
   stats: TodayStats | null
@@ -203,6 +258,8 @@ function TodayView({
   waterStats: WaterDailyStats | null
   waterStreak: number
   waterSettings: WaterSettings | null
+  exerciseStats: ExerciseDailyStats | null
+  exerciseStreak: number
   onRecordWater: (amount: number) => void
 }) {
   const dailyGoal = waterSettings?.dailyGoal || 2000
@@ -277,6 +334,44 @@ function TodayView({
           color="text-orange-500"
         />
       </div>
+
+      {/* 今日运动卡片 */}
+      {exerciseStats && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">🏃 今日运动</h3>
+            {exerciseStreak > 0 && (
+              <span className="text-xs text-green-500 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                🔥 连续 {exerciseStreak} 天
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-1">🪑 站立</p>
+              <p className="text-2xl font-semibold text-orange-500 tabular-nums">
+                {exerciseStats.standCount}
+                <span className="text-sm font-normal text-gray-400 ml-1">次</span>
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-1">💪 拉伸</p>
+              <p className="text-2xl font-semibold text-purple-500 tabular-nums">
+                {exerciseStats.stretchCount}
+                <span className="text-sm font-normal text-gray-400 ml-1">次</span>
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-1">🧘 正念</p>
+              <p className="text-2xl font-semibold text-violet-500 tabular-nums">
+                {exerciseStats.mindfulCount}
+                <span className="text-sm font-normal text-gray-400 ml-1">次</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 今日喝水卡片 */}
       {waterSettings?.enabled && (

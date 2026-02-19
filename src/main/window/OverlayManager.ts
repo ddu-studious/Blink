@@ -5,18 +5,18 @@
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { BreakType } from '../types'
+import { BreakType, RestScreenMode } from '../types'
 import log from 'electron-log'
 
 export class OverlayManager {
   private overlayWindows: BrowserWindow[] = []
 
   /** 显示休息覆盖 (覆盖所有屏幕) */
-  show(breakType: BreakType, duration: number): void {
+  show(breakType: BreakType, duration: number, forceMode?: RestScreenMode): void {
     this.closeAll()
 
     const displays = screen.getAllDisplays()
-    log.info(`[OverlayManager] 创建休息覆盖，屏幕数量: ${displays.length}`)
+    log.info(`[OverlayManager] 创建休息覆盖，屏幕数量: ${displays.length}${forceMode ? `，强制模式: ${forceMode}` : ''}`)
 
     displays.forEach((display, index) => {
       const win = new BrowserWindow({
@@ -33,7 +33,6 @@ export class OverlayManager {
         minimizable: false,
         maximizable: false,
         closable: false,
-        // 只有主屏幕可聚焦 (显示跳过按钮)
         focusable: index === 0,
         webPreferences: {
           preload: join(__dirname, '../preload/index.mjs'),
@@ -42,11 +41,12 @@ export class OverlayManager {
         }
       })
 
-      // 设置窗口层级为 screen-saver (最高优先级)
       win.setAlwaysOnTop(true, 'screen-saver')
 
-      // 加载休息页面
-      const query = `breakType=${breakType}&duration=${duration}&isPrimary=${index === 0}`
+      let query = `breakType=${breakType}&duration=${duration}&isPrimary=${index === 0}`
+      if (forceMode) {
+        query += `&forceMode=${forceMode}`
+      }
 
       if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
         win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/rest?${query}`)
@@ -56,7 +56,6 @@ export class OverlayManager {
         })
       }
 
-      // macOS 全屏显示
       if (process.platform === 'darwin') {
         win.setSimpleFullScreen(true)
       }

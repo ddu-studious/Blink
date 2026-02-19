@@ -3,6 +3,8 @@ import RestPage from './pages/Rest/RestPage'
 import SettingsPage from './pages/Settings/SettingsPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 
+type RestScreenMode = 'classic' | 'nature' | 'breathing' | 'eyeTraining' | 'darkScreen' | 'stretch' | 'mindful'
+
 /**
  * 路由解析: 从 hash 中获取当前页面路径和参数
  * 格式: #/rest?breakType=mini&duration=20&isPrimary=true
@@ -36,6 +38,7 @@ function App() {
           breakType={(params.get('breakType') as 'mini' | 'long') || 'mini'}
           duration={parseInt(params.get('duration') || '20', 10)}
           isPrimary={params.get('isPrimary') === 'true'}
+          forceMode={params.get('forceMode') as RestScreenMode | null}
         />
       )
     case '/settings':

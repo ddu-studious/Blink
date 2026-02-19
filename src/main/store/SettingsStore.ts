@@ -47,6 +47,23 @@ class SettingsStore {
       this.store.set('water', DEFAULT_SETTINGS.water)
       log.info('[SettingsStore] 迁移: 添加 water 默认值')
     }
+    // v1.2.0: 添加 exercise 字段 (运动健康)
+    const exercise = this.store.get('exercise')
+    if (!exercise) {
+      this.store.set('exercise', DEFAULT_SETTINGS.exercise)
+      log.info('[SettingsStore] 迁移: 添加 exercise 默认值')
+    }
+    // v1.3.0: 添加 mindfulness 字段 (正念与专注)
+    const mindfulness = this.store.get('mindfulness')
+    if (!mindfulness) {
+      this.store.set('mindfulness', DEFAULT_SETTINGS.mindfulness)
+      log.info('[SettingsStore] 迁移: 添加 mindfulness 默认值')
+    }
+    // v1.3.1: 添加 smart.mediaActivityDetection 字段 (媒体活动检测)
+    if (smart && smart.mediaActivityDetection === undefined) {
+      this.store.set('smart.mediaActivityDetection', DEFAULT_SETTINGS.smart.mediaActivityDetection)
+      log.info('[SettingsStore] 迁移: 添加 mediaActivityDetection 默认值')
+    }
   }
 
   /** 获取全部设置 */
@@ -56,6 +73,8 @@ class SettingsStore {
       reminder: this.store.get('reminder', DEFAULT_SETTINGS.reminder),
       smart: this.store.get('smart', DEFAULT_SETTINGS.smart),
       water: this.store.get('water', DEFAULT_SETTINGS.water),
+      exercise: this.store.get('exercise', DEFAULT_SETTINGS.exercise),
+      mindfulness: this.store.get('mindfulness', DEFAULT_SETTINGS.mindfulness),
       firstRun: this.store.get('firstRun', true)
     }
   }

@@ -3,11 +3,14 @@
 // ========================================
 
 import { EventEmitter } from 'events'
-import { BreakType, TimerState, TimerStatus, AppSettings } from '../types'
+import { BreakType, RestScreenMode, TimerState, TimerStatus, AppSettings } from '../types'
 import { settingsStore } from '../store/SettingsStore'
 import { statsDatabase } from '../store/StatsDatabase'
 import log from 'electron-log'
 import dayjs from 'dayjs'
+
+/** 暂停来源标识 */
+type PauseSource = 'idle' | 'suspend' | 'lock-screen' | 'dnd' | 'fullscreen' | 'manual' | 'schedule'
 
 export class TimerManager extends EventEmitter {
   private tickInterval: NodeJS.Timeout | null = null
@@ -30,6 +33,9 @@ export class TimerManager extends EventEmitter {
   // 预告通知状态
   private miniBreakWarned = false
   private longBreakWarned = false
+
+  // 多暂停源追踪：只有所有暂停源都解除时才恢复
+  private activePauseSources = new Set<PauseSource>()
 
   constructor() {
     super()
@@ -64,11 +70,30 @@ export class TimerManager extends EventEmitter {
 
   /** 启动计时器 */
   start(): void {
+    // 如果已经在运行，直接返回
     if (this.status === 'running') return
 
+    // 如果处于暂停状态，走恢复路径
+    if (this.status === 'paused') {
+      this.resume()
+      return
+    }
+
+    // 如果正在休息中，不允许启动
+    if (this.status === 'break') {
+      log.warn('[TimerManager] 休息中，无法启动计时器')
+      return
+    }
+
+    // 从 idle 状态启动
     this.status = 'running'
     this.resetCountdowns()
     this.loadTodayStats()
+
+    // 确保清除旧的定时器（防止重复）
+    if (this.tickInterval) {
+      clearInterval(this.tickInterval)
+    }
 
     // 每秒一次心跳
     this.tickInterval = setInterval(() => this.tick(), 1000)
@@ -77,17 +102,43 @@ export class TimerManager extends EventEmitter {
     this.emitState()
   }
 
-  /** 暂停计时器 */
+  /** 确保计时器正在运行（保活方法） */
+  ensureRunning(): void {
+    // 如果状态是 idle，自动启动
+    if (this.status === 'idle') {
+      log.info('[TimerManager] 检测到 idle 状态，自动启动计时器')
+      this.start()
+      return
+    }
+
+    // 如果状态是 paused 且在工作时段内，自动恢复
+    if (this.status === 'paused' && this.isInWorkSchedule()) {
+      log.info('[TimerManager] 检测到 paused 状态且在工作时段，自动恢复')
+      this.resume()
+      return
+    }
+
+    // 如果状态是 running 但定时器丢失，重新创建
+    if (this.status === 'running' && !this.tickInterval) {
+      log.warn('[TimerManager] 检测到定时器丢失，重新创建')
+      this.tickInterval = setInterval(() => this.tick(), 1000)
+      this.emitState()
+    }
+  }
+
+  /** 暂停计时器（用户手动） */
   pause(): void {
     if (this.status !== 'running') return
+    this.activePauseSources.add('manual')
     this.status = 'paused'
     log.info('[TimerManager] 计时器已暂停')
     this.emitState()
   }
 
-  /** 恢复计时器 */
+  /** 恢复计时器（用户手动） — 清除所有暂停源 */
   resume(): void {
     if (this.status !== 'paused') return
+    this.activePauseSources.clear()
     this.status = 'running'
     log.info('[TimerManager] 计时器已恢复')
     this.emitState()
@@ -102,6 +153,7 @@ export class TimerManager extends EventEmitter {
     this.status = 'idle'
     this.currentBreakType = null
     this.breakCountdown = 0
+    this.activePauseSources.clear()
     log.info('[TimerManager] 计时器已停止')
     this.emitState()
   }
@@ -181,10 +233,8 @@ export class TimerManager extends EventEmitter {
       }
     }
 
-    // 每 5 秒广播一次状态 (减少开销)
-    if (this.miniBreakCountdown % 5 === 0) {
-      this.emitState()
-    }
+    // 每秒广播状态（确保前端倒计时流畅）
+    this.emitState()
   }
 
   /** 休息时间心跳 */
@@ -201,7 +251,7 @@ export class TimerManager extends EventEmitter {
   }
 
   /** 开始休息 */
-  startBreak(type: BreakType): void {
+  startBreak(type: BreakType, forceMode?: RestScreenMode): void {
     const settings = this.getSettings()
     const duration =
       type === 'mini'
@@ -213,10 +263,9 @@ export class TimerManager extends EventEmitter {
     this.breakCountdown = duration
     this.breakStartTime = dayjs().toISOString()
 
-    log.info(`[TimerManager] 开始 ${type} 休息，时长 ${duration} 秒`)
+    log.info(`[TimerManager] 开始 ${type} 休息，时长 ${duration} 秒${forceMode ? `，强制模式: ${forceMode}` : ''}`)
 
-    // 通知主进程显示休息窗口
-    this.emit('break-start', { type, duration })
+    this.emit('break-start', { type, duration, forceMode })
     this.emitState()
   }
 
@@ -310,9 +359,9 @@ export class TimerManager extends EventEmitter {
   }
 
   /** 手动触发休息 */
-  takeBreakNow(type: BreakType = 'mini'): void {
+  takeBreakNow(type: BreakType = 'mini', forceMode?: RestScreenMode): void {
     if (this.status === 'break') return
-    this.startBreak(type)
+    this.startBreak(type, forceMode)
   }
 
   /** 防作弊: 检测到活动时重置休息倒计时 */
@@ -332,20 +381,59 @@ export class TimerManager extends EventEmitter {
     this.emitState()
   }
 
-  /** 处理系统挂起 (休眠/锁屏) */
-  handleSuspend(): void {
+  /** 添加暂停源并暂停 */
+  addPauseSource(source: PauseSource): void {
+    if (this.status !== 'running' && this.status !== 'paused') return
+
+    this.activePauseSources.add(source)
     if (this.status === 'running') {
       this.pause()
-      log.info('[TimerManager] 系统挂起，自动暂停')
+      log.info(`[TimerManager] 自动暂停 (来源: ${source}, 当前暂停源: ${[...this.activePauseSources].join(', ')})`)
     }
+  }
+
+  /** 移除暂停源，所有源都移除后才恢复 */
+  removePauseSource(source: PauseSource): void {
+    this.activePauseSources.delete(source)
+
+    if (this.status === 'paused' && this.activePauseSources.size === 0) {
+      this.resume()
+      log.info(`[TimerManager] 所有暂停源已移除，自动恢复 (移除: ${source})`)
+    } else if (this.activePauseSources.size > 0) {
+      log.info(`[TimerManager] 暂停源 ${source} 已移除，但仍有活跃暂停源: ${[...this.activePauseSources].join(', ')}`)
+    }
+  }
+
+  /** 处理系统挂起 (休眠) */
+  handleSuspend(): void {
+    this.addPauseSource('suspend')
   }
 
   /** 处理系统恢复 */
   handleResume(): void {
-    if (this.status === 'paused') {
-      this.resume()
-      log.info('[TimerManager] 系统恢复，自动继续')
-    }
+    this.removePauseSource('suspend')
+  }
+
+  /** 处理锁屏 */
+  handleLockScreen(): void {
+    this.addPauseSource('lock-screen')
+  }
+
+  /** 处理解锁屏幕 */
+  handleUnlockScreen(): void {
+    this.removePauseSource('lock-screen')
+  }
+
+  /** 处理免打扰模式 */
+  handleDnd(isDnd: boolean): void {
+    if (isDnd) this.addPauseSource('dnd')
+    else this.removePauseSource('dnd')
+  }
+
+  /** 处理全屏应用检测 */
+  handleFullscreen(isFullscreen: boolean): void {
+    if (isFullscreen) this.addPauseSource('fullscreen')
+    else this.removePauseSource('fullscreen')
   }
 
   /** 处理空闲检测 */
@@ -353,13 +441,8 @@ export class TimerManager extends EventEmitter {
     const settings = this.getSettings()
     if (!settings.smart.idleDetectionEnabled) return
 
-    if (isIdle && this.status === 'running') {
-      this.pause()
-      log.info('[TimerManager] 用户空闲，自动暂停')
-    } else if (!isIdle && this.status === 'paused') {
-      this.resume()
-      log.info('[TimerManager] 用户活动，自动恢复')
-    }
+    if (isIdle) this.addPauseSource('idle')
+    else this.removePauseSource('idle')
   }
 
   /** 获取当前状态 */

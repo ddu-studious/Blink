@@ -43,6 +43,24 @@ export interface WaterDailyStats {
   recordCount: number
 }
 
+export interface ExerciseRecord {
+  id?: number
+  timestamp: string
+  exerciseType: 'stand' | 'stretch' | 'mindful'
+  exerciseName?: string
+  duration: number
+  source: 'manual' | 'reminder' | 'break'
+  createdDate: string
+}
+
+export interface ExerciseDailyStats {
+  date: string
+  standCount: number
+  stretchCount: number
+  mindfulCount: number
+  totalDuration: number
+}
+
 class StatsDatabase {
   private db: Database.Database | null = null
 
@@ -95,6 +113,19 @@ class StatsDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_water_records_date ON water_records(created_date);
+
+      CREATE TABLE IF NOT EXISTS exercise_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        exercise_type TEXT NOT NULL,
+        exercise_name TEXT,
+        duration INTEGER DEFAULT 0,
+        source TEXT DEFAULT 'manual',
+        created_date TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_exercise_timestamp ON exercise_records(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_exercise_date ON exercise_records(created_date);
     `)
   }
 
@@ -286,6 +317,107 @@ class StatsDatabase {
        ORDER BY created_date DESC
        LIMIT 90`
     ).all(dailyGoal) as { date: string; total_ml: number }[]
+
+    if (rows.length === 0) return 0
+
+    let streak = 0
+    let checkDate = dayjs()
+
+    if (rows[0].date !== checkDate.format('YYYY-MM-DD')) {
+      checkDate = checkDate.subtract(1, 'day')
+    }
+
+    for (const row of rows) {
+      if (row.date === checkDate.format('YYYY-MM-DD')) {
+        streak++
+        checkDate = checkDate.subtract(1, 'day')
+      } else {
+        break
+      }
+    }
+
+    return streak
+  }
+
+  // ========================================
+  // 运动记录
+  // ========================================
+
+  /** 记录一次运动 */
+  addExerciseRecord(record: ExerciseRecord): number {
+    const stmt = this.db!.prepare(`
+      INSERT INTO exercise_records (timestamp, exercise_type, exercise_name, duration, source, created_date)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(
+      record.timestamp,
+      record.exerciseType,
+      record.exerciseName || null,
+      record.duration,
+      record.source,
+      record.createdDate
+    )
+    log.info(`[StatsDatabase] 记录运动: ${record.exerciseType} (${record.source})`)
+    return result.lastInsertRowid as number
+  }
+
+  /** 获取今日运动统计 */
+  getExerciseToday(): ExerciseDailyStats {
+    const today = dayjs().format('YYYY-MM-DD')
+    const row = this.db!.prepare(
+      `SELECT
+        COUNT(CASE WHEN exercise_type = 'stand' THEN 1 END) as stand_count,
+        COUNT(CASE WHEN exercise_type = 'stretch' THEN 1 END) as stretch_count,
+        COUNT(CASE WHEN exercise_type = 'mindful' THEN 1 END) as mindful_count,
+        SUM(duration) as total_duration
+       FROM exercise_records
+       WHERE created_date = ?`
+    ).get(today) as { stand_count: number; stretch_count: number; mindful_count: number; total_duration: number | null } | undefined
+
+    return {
+      date: today,
+      standCount: row?.stand_count || 0,
+      stretchCount: row?.stretch_count || 0,
+      mindfulCount: row?.mindful_count || 0,
+      totalDuration: row?.total_duration || 0
+    }
+  }
+
+  /** 获取日期范围内的每日运动统计 */
+  getExerciseRange(startDate: string, endDate: string): ExerciseDailyStats[] {
+    const rows = this.db!.prepare(
+      `SELECT 
+        created_date as date,
+        COUNT(CASE WHEN exercise_type = 'stand' THEN 1 END) as stand_count,
+        COUNT(CASE WHEN exercise_type = 'stretch' THEN 1 END) as stretch_count,
+        COUNT(CASE WHEN exercise_type = 'mindful' THEN 1 END) as mindful_count,
+        SUM(duration) as total_duration
+       FROM exercise_records
+       WHERE created_date >= ? AND created_date <= ?
+       GROUP BY created_date
+       ORDER BY created_date ASC`
+    ).all(startDate, endDate) as { date: string; stand_count: number; stretch_count: number; mindful_count: number; total_duration: number | null }[]
+
+    return rows.map((row) => ({
+      date: row.date,
+      standCount: row.stand_count,
+      stretchCount: row.stretch_count,
+      mindfulCount: row.mindful_count,
+      totalDuration: row.total_duration || 0
+    }))
+  }
+
+  /** 获取连续运动打卡天数（至少完成一次站立或拉伸） */
+  getExerciseStreak(): number {
+    const rows = this.db!.prepare(
+      `SELECT created_date as date,
+        COUNT(*) as count
+       FROM exercise_records
+       GROUP BY created_date
+       HAVING count > 0
+       ORDER BY created_date DESC
+       LIMIT 90`
+    ).all() as { date: string; count: number }[]
 
     if (rows.length === 0) return 0
 
