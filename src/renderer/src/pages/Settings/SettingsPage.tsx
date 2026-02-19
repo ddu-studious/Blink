@@ -872,8 +872,59 @@ function GeneralSection({ settings, onSave }: { settings: Settings; onSave: (s: 
 // ========================================================
 // 关于
 // ========================================================
+
+const PERMISSION_ITEMS: { icon: string; title: string; desc: string; required: boolean }[] = [
+  {
+    icon: '🔔',
+    title: '系统通知',
+    desc: '在休息即将开始时发送预告通知，拒绝后仅影响通知提醒，不影响全屏覆盖。',
+    required: true
+  },
+  {
+    icon: '🖥',
+    title: '显示器信息',
+    desc: '获取已连接的显示器列表，用于在所有屏幕上显示休息覆盖。',
+    required: true
+  },
+  {
+    icon: '🔋',
+    title: '电源状态',
+    desc: '检测休眠、唤醒和锁屏事件，在您离开时自动暂停计时，避免无效提醒。',
+    required: true
+  },
+  {
+    icon: '💤',
+    title: '空闲检测',
+    desc: '检测键盘和鼠标是否长时间未操作。您已经在休息时，无需再次提醒。',
+    required: true
+  },
+  {
+    icon: '🌙',
+    title: '免打扰感知',
+    desc: '只读检测系统免打扰/专注模式状态，开启时自动暂停提醒。可在「智能」中关闭。',
+    required: false
+  },
+  {
+    icon: '📺',
+    title: '全屏应用感知',
+    desc: '检测是否有应用正在全屏运行（如演示、视频），全屏时自动暂停提醒。可在「智能」中关闭。',
+    required: false
+  },
+  {
+    icon: '⌨️',
+    title: '全局快捷键',
+    desc: '注册全局键盘快捷键，方便您随时暂停或触发休息。可在「快捷键」中自定义或关闭。',
+    required: false
+  },
+  {
+    icon: '🚀',
+    title: '开机自启动',
+    desc: '添加到系统登录项，开机后自动运行。默认关闭，可在「通用」中开启。',
+    required: false
+  }
+]
+
 function AboutSection() {
-  // 获取应用图标路径
   const iconSrc = new URL(
     '../../../../../resources/icons/icon-128.png',
     import.meta.url
@@ -899,6 +950,53 @@ function AboutSection() {
             基于 20-20-20 法则的智能护眼提醒应用，帮助您在数字世界中保护双眼。
           </p>
           <p className="text-[11px] text-gray-300 dark:text-gray-600 mt-2">Made with ❤️ for your eyes</p>
+        </div>
+      </Card>
+
+      {/* 权限与隐私 */}
+      <h2 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mt-6 mb-1">权限与隐私</h2>
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3 leading-relaxed">
+        青眸仅申请实现核心功能所必需的最小权限。所有数据完全存储在本地，不会上传至任何服务器。
+      </p>
+
+      <Card>
+        {PERMISSION_ITEMS.map((item, i) => (
+          <div key={item.title}>
+            {i > 0 && <CardDividerThin />}
+            <div className="flex items-start gap-3 px-4 py-3">
+              <span className="text-base mt-0.5 flex-shrink-0">{item.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">{item.title}</p>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                    item.required
+                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-gray-100 text-gray-500 dark:bg-[#333] dark:text-gray-400'
+                  }`}>
+                    {item.required ? '必需' : '可选'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 leading-relaxed">{item.desc}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      {/* 隐私承诺 */}
+      <Card>
+        <div className="px-4 py-3 flex items-start gap-3">
+          <span className="text-base mt-0.5 flex-shrink-0">🔒</span>
+          <div>
+            <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">隐私承诺</p>
+            <ul className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 space-y-1 leading-relaxed">
+              <li>• 不收集任何个人信息，不发送网络请求</li>
+              <li>• 设置和统计数据仅保存在您的电脑本地</li>
+              <li>• 不读取您的文件、照片或浏览记录</li>
+              <li>• 不获取辅助功能、屏幕录制等敏感权限</li>
+              <li>• 项目完全开源，接受社区审查</li>
+            </ul>
+          </div>
         </div>
       </Card>
     </div>

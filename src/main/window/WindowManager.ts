@@ -2,7 +2,7 @@
 // 窗口管理器 - 设置/统计等普通窗口
 // ========================================
 
-import { BrowserWindow, nativeImage } from 'electron'
+import { app, BrowserWindow, nativeImage } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import log from 'electron-log'
@@ -26,7 +26,7 @@ export class WindowManager {
   /** 显示设置窗口 */
   showSettings(): void {
     if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
-      this.settingsWindow.focus()
+      this.bringWindowToFront(this.settingsWindow)
       return
     }
 
@@ -47,7 +47,7 @@ export class WindowManager {
 
     this.settingsWindow.on('ready-to-show', () => {
       themeService.syncThemeToWindow(this.settingsWindow!)
-      this.settingsWindow!.show()
+      this.bringWindowToFront(this.settingsWindow!)
     })
 
     this.settingsWindow.webContents.on('did-finish-load', () => {
@@ -72,7 +72,7 @@ export class WindowManager {
   /** 显示统计仪表盘窗口 */
   showDashboard(): void {
     if (this.dashboardWindow && !this.dashboardWindow.isDestroyed()) {
-      this.dashboardWindow.focus()
+      this.bringWindowToFront(this.dashboardWindow)
       return
     }
 
@@ -92,7 +92,7 @@ export class WindowManager {
 
     this.dashboardWindow.on('ready-to-show', () => {
       themeService.syncThemeToWindow(this.dashboardWindow!)
-      this.dashboardWindow!.show()
+      this.bringWindowToFront(this.dashboardWindow!)
     })
 
     this.dashboardWindow.webContents.on('did-finish-load', () => {
@@ -112,6 +112,24 @@ export class WindowManager {
     }
 
     log.info('[WindowManager] 统计窗口已打开')
+  }
+
+  /**
+   * 将窗口可靠地提到最前面
+   *
+   * LSUIElement 应用（无 Dock 图标）在 macOS 上 focus() 经常无效，
+   * 因为应用本身不在前台激活状态。需要先 app.show()/app.focus()
+   * 激活应用，再对窗口执行 show + focus 组合。
+   */
+  private bringWindowToFront(win: BrowserWindow): void {
+    if (process.platform === 'darwin') {
+      app.show()
+    }
+    if (win.isMinimized()) {
+      win.restore()
+    }
+    win.show()
+    win.focus()
   }
 
   /** 关闭所有窗口 */
