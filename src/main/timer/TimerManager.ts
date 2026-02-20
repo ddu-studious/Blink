@@ -111,10 +111,16 @@ export class TimerManager extends EventEmitter {
       return
     }
 
-    // 如果状态是 paused 且在工作时段内，自动恢复
-    if (this.status === 'paused' && this.isInWorkSchedule()) {
-      log.info('[TimerManager] 检测到 paused 状态且在工作时段，自动恢复')
-      this.resume()
+    // 如果是用户手动暂停的，不自动恢复 — 尊重用户意愿
+    if (this.isManuallyPaused()) {
+      return
+    }
+
+    // 如果状态是 paused（非手动）且在工作时段内且无活跃暂停源，自动恢复
+    if (this.status === 'paused' && this.isInWorkSchedule() && this.activePauseSources.size === 0) {
+      log.info('[TimerManager] 检测到非手动 paused 状态且在工作时段，自动恢复')
+      this.status = 'running'
+      this.emitState()
       return
     }
 
@@ -126,22 +132,27 @@ export class TimerManager extends EventEmitter {
     }
   }
 
-  /** 暂停计时器（用户手动） */
+  /** 暂停计时器（用户手动从托盘/快捷键触发） */
   pause(): void {
     if (this.status !== 'running') return
     this.activePauseSources.add('manual')
     this.status = 'paused'
-    log.info('[TimerManager] 计时器已暂停')
+    log.info('[TimerManager] 用户手动暂停')
     this.emitState()
   }
 
-  /** 恢复计时器（用户手动） — 清除所有暂停源 */
+  /** 恢复计时器（用户手动从托盘/快捷键触发） — 清除所有暂停源 */
   resume(): void {
     if (this.status !== 'paused') return
     this.activePauseSources.clear()
     this.status = 'running'
-    log.info('[TimerManager] 计时器已恢复')
+    log.info('[TimerManager] 用户手动恢复')
     this.emitState()
+  }
+
+  /** 是否由用户手动暂停 */
+  isManuallyPaused(): boolean {
+    return this.status === 'paused' && this.activePauseSources.has('manual')
   }
 
   /** 停止计时器 */
@@ -193,10 +204,14 @@ export class TimerManager extends EventEmitter {
     // 检查工作时段
     if (!this.isInWorkSchedule()) {
       if (this.status === 'running') {
-        this.pause()
-        log.info('[TimerManager] 非工作时段，自动暂停')
+        this.addPauseSource('schedule')
       }
       return
+    } else {
+      // 回到工作时段后，移除工作时段暂停源
+      if (this.activePauseSources.has('schedule')) {
+        this.removePauseSource('schedule')
+      }
     }
 
     // Mini Break 倒计时
@@ -381,24 +396,26 @@ export class TimerManager extends EventEmitter {
     this.emitState()
   }
 
-  /** 添加暂停源并暂停 */
+  /** 添加自动暂停源并暂停（系统触发，非用户手动） */
   addPauseSource(source: PauseSource): void {
     if (this.status !== 'running' && this.status !== 'paused') return
 
     this.activePauseSources.add(source)
     if (this.status === 'running') {
-      this.pause()
+      this.status = 'paused'
       log.info(`[TimerManager] 自动暂停 (来源: ${source}, 当前暂停源: ${[...this.activePauseSources].join(', ')})`)
+      this.emitState()
     }
   }
 
-  /** 移除暂停源，所有源都移除后才恢复 */
+  /** 移除自动暂停源，所有源都移除后才恢复 */
   removePauseSource(source: PauseSource): void {
     this.activePauseSources.delete(source)
 
     if (this.status === 'paused' && this.activePauseSources.size === 0) {
-      this.resume()
+      this.status = 'running'
       log.info(`[TimerManager] 所有暂停源已移除，自动恢复 (移除: ${source})`)
+      this.emitState()
     } else if (this.activePauseSources.size > 0) {
       log.info(`[TimerManager] 暂停源 ${source} 已移除，但仍有活跃暂停源: ${[...this.activePauseSources].join(', ')}`)
     }

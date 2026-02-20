@@ -1,6 +1,6 @@
 {
   "name": "qingmou",
-  "version": "1.3.0",
+  "version": "1.3.2",
   "description": "青眸 - 跨平台智能护眼提醒桌面应用",
   "main": "./out/main/index.js",
   "author": "QingMou Team",

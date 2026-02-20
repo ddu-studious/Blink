@@ -33,11 +33,13 @@ export class WindowManager {
     this.settingsWindow = new BrowserWindow({
       width: 740,
       height: 560,
+      minWidth: 640,
+      minHeight: 480,
       title: '青眸 - 设置',
       icon: getAppIcon(),
       show: false,
       autoHideMenuBar: true,
-      resizable: false,
+      resizable: true,
       webPreferences: {
         preload: join(__dirname, '../preload/index.mjs'),
         contextIsolation: true,
