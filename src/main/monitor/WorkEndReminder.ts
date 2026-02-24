@@ -68,14 +68,40 @@ export class WorkEndReminder extends EventEmitter {
   }
 
   private showNotification(time: string): void {
+    const isMac = process.platform === 'darwin'
+
     const notification = new Notification({
       title: '🌙 下班时间到了',
-      body: `现在是 ${time}，点击进入正念放松，给今天画个句号`,
-      silent: false
+      body: `现在是 ${time}，给今天画个句号，放松一下吧`,
+      silent: false,
+      ...(isMac
+        ? {
+            actions: [
+              { type: 'button', text: '放松一下' },
+              { type: 'button', text: '延后 30 分' }
+            ],
+            closeButtonText: '今日不再提醒'
+          }
+        : {})
+    })
+
+    notification.on('action', (event) => {
+      const actionIndex = (event as unknown as { actionIndex: number }).actionIndex
+      if (actionIndex === 0) {
+        this.emit('work-end-action-requested')
+      } else if (actionIndex === 1) {
+        this.postpone()
+      }
     })
 
     notification.on('click', () => {
       this.emit('work-end-action-requested')
+    })
+
+    notification.on('close', () => {
+      if (isMac) {
+        this.dismiss()
+      }
     })
 
     notification.show()

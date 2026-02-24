@@ -274,6 +274,14 @@ function initModules(): void {
     windowManager.showDashboard()
   })
 
+  // 喝水通知按钮 "已喝水" → 记录 250ml + 重置计时
+  waterReminder.on('water-drink-confirmed', () => {
+    statsDatabase.addWaterRecord(250, 'notification')
+    waterReminder.resetTimer()
+    refreshWaterProgress()
+    log.info('[Main] 通知按钮记录喝水 250ml')
+  })
+
   // 站立提醒点击 → 打开拉伸引导
   standReminder.on('stand-reminder-clicked', () => {
     log.info('[Main] 用户点击站立通知，触发拉伸引导')
@@ -281,6 +289,20 @@ function initModules(): void {
       timerManager.start()
     }
     timerManager.takeBreakNow('long', 'stretch')
+  })
+
+  // 站立通知按钮 "已站立" → 记录运动 + 重置计时
+  standReminder.on('stand-confirmed', () => {
+    const now = new Date().toISOString()
+    statsDatabase.addExerciseRecord({
+      timestamp: now,
+      exerciseType: 'stand',
+      exerciseName: '站立活动',
+      duration: 60,
+      source: 'notification',
+      createdDate: now.split('T')[0]
+    })
+    log.info('[Main] 通知按钮记录站立活动')
   })
 
   // 初始化喝水进度 & 注册 IPC 回调

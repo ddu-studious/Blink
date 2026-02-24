@@ -34,7 +34,7 @@ export interface WaterRecord {
   amountMl: number
   recordedAt: string
   createdDate: string
-  source: 'manual' | 'quick' | 'tray'
+  source: 'manual' | 'quick' | 'tray' | 'notification'
 }
 
 export interface WaterDailyStats {
@@ -49,7 +49,7 @@ export interface ExerciseRecord {
   exerciseType: 'stand' | 'stretch' | 'mindful'
   exerciseName?: string
   duration: number
-  source: 'manual' | 'reminder' | 'break'
+  source: 'manual' | 'reminder' | 'break' | 'notification'
   createdDate: string
 }
 

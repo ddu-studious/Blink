@@ -9,9 +9,10 @@ import log from 'electron-log'
 
 export class SedentaryDetector extends EventEmitter {
   private checkInterval: NodeJS.Timeout | null = null
-  private lastIdleTime: number = 0 // 最后一次空闲时间（Unix 时间戳，秒）
-  private lastNotificationTime: number = 0 // 最后一次通知时间（Unix 时间戳，秒）
+  private lastIdleTime: number = 0
+  private lastNotificationTime: number = 0
   private wasSedentary = false
+  private snoozeTimer: NodeJS.Timeout | null = null
 
   /** 启动久坐检测 */
   start(): void {
@@ -31,6 +32,10 @@ export class SedentaryDetector extends EventEmitter {
     if (this.checkInterval) {
       clearInterval(this.checkInterval)
       this.checkInterval = null
+    }
+    if (this.snoozeTimer) {
+      clearTimeout(this.snoozeTimer)
+      this.snoozeTimer = null
     }
   }
 
@@ -80,10 +85,30 @@ export class SedentaryDetector extends EventEmitter {
     }
     this.lastNotificationTime = now
 
+    const isMac = process.platform === 'darwin'
+
     const notification = new Notification({
       title: '🪑 久坐提醒',
-      body: `您已连续使用 ${thresholdMinutes} 分钟，点击开始拉伸活动`,
-      silent: false
+      body: `您已连续使用 ${thresholdMinutes} 分钟，起来活动一下吧`,
+      silent: false,
+      ...(isMac
+        ? {
+            actions: [
+              { type: 'button', text: '去拉伸' },
+              { type: 'button', text: '稍后提醒' }
+            ],
+            closeButtonText: '忽略'
+          }
+        : {})
+    })
+
+    notification.on('action', (event) => {
+      const actionIndex = (event as unknown as { actionIndex: number }).actionIndex
+      if (actionIndex === 0) {
+        this.emit('sedentary-action-requested')
+      } else if (actionIndex === 1) {
+        this.handleSnooze(thresholdMinutes)
+      }
     })
 
     notification.on('click', () => {
@@ -91,6 +116,19 @@ export class SedentaryDetector extends EventEmitter {
     })
 
     notification.show()
+  }
+
+  /** 稍后提醒 */
+  private handleSnooze(thresholdMinutes: number): void {
+    if (this.snoozeTimer) {
+      clearTimeout(this.snoozeTimer)
+    }
+    this.snoozeTimer = setTimeout(() => {
+      this.snoozeTimer = null
+      this.showNotification(thresholdMinutes)
+    }, 5 * 60 * 1000)
+
+    log.info('[SedentaryDetector] 用户选择稍后提醒，5 分钟后再次提醒')
   }
 
   /** 获取当前连续使用时间（秒） */
