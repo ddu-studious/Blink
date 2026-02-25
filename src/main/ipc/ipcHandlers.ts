@@ -104,8 +104,8 @@ export function registerIpcHandlers(timerManager: TimerManager): void {
       themeService.applyTheme(settings.general.theme as ThemeMode)
     }
 
-    // 同步全局快捷键
-    if (settings.general?.globalShortcuts !== undefined) {
+    // 同步全局快捷键（开关变更或快捷键配置变更时都需要重新应用）
+    if (settings.general?.shortcutsEnabled !== undefined || settings.general?.globalShortcuts !== undefined) {
       shortcutService.applyShortcuts()
     }
 

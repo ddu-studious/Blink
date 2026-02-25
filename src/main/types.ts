@@ -38,6 +38,7 @@ export interface GeneralSettings {
   autoLaunch: boolean
   language: Language
   theme: ThemeMode
+  shortcutsEnabled: boolean
   globalShortcuts: ShortcutSettings
 }
 
@@ -227,6 +228,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     autoLaunch: false,
     language: 'zh-CN',
     theme: 'system',
+    shortcutsEnabled: false,
     globalShortcuts: {
       togglePause: 'CommandOrControl+Shift+P',
       takeBreak: 'CommandOrControl+Shift+B',

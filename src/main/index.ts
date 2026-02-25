@@ -154,7 +154,7 @@ function initModules(): void {
   setWorkEndReminder(workEndReminder)
   setWaterReminder(waterReminder)
 
-  // 10. 注册全局快捷键
+  // 11. 注册全局快捷键（register 内部会检查 shortcutsEnabled 开关）
   shortcutService.register({
     onTogglePause: () => {
       const state = timerManager.getState()
@@ -172,12 +172,31 @@ function initModules(): void {
 
   // ---- 事件连接 ----
 
-  // 计时器状态更新 → 广播给渲染进程 + 更新托盘
+  // 计时器状态更新 → 广播给渲染进程 + 更新托盘 + 联动独立提醒
+  let prevTimerStatus: string = 'idle'
   timerManager.on('state-update', (state: TimerState) => {
     broadcastTimerState(state)
     trayManager.updateTooltip(state)
     trayManager.updateTitle(state) // macOS 菜单栏倒计时显示
     trayManager.updateMenu(state.status)
+
+    // 暂停/恢复时联动独立提醒模块
+    if (state.status !== prevTimerStatus) {
+      if (state.status === 'paused') {
+        waterReminder?.stop()
+        standReminder?.stop()
+        sedentaryDetector?.stop()
+        workEndReminder?.stop()
+        log.info('[Main] 护眼已暂停，独立提醒模块已同步暂停')
+      } else if (state.status === 'running' && prevTimerStatus === 'paused') {
+        waterReminder?.start()
+        standReminder?.start()
+        sedentaryDetector?.start()
+        workEndReminder?.start()
+        log.info('[Main] 护眼已恢复，独立提醒模块已同步恢复')
+      }
+      prevTimerStatus = state.status
+    }
   })
 
   // 休息即将开始 (30秒预告) → 系统通知

@@ -166,6 +166,16 @@ export class TrayManager {
     this.tray = new Tray(icon)
     this.tray.setToolTip('青眸 - 护眼提醒')
 
+    // Windows: 左键单击弹出菜单，双击打开设置窗口
+    if (process.platform === 'win32') {
+      this.tray.on('click', () => {
+        this.tray?.popUpContextMenu()
+      })
+      this.tray.on('double-click', () => {
+        this.callbacks.onShowSettings()
+      })
+    }
+
     this.updateMenu('idle')
 
     log.info('[TrayManager] 系统托盘已创建')

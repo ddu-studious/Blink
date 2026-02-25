@@ -57,6 +57,7 @@ interface Settings {
     autoLaunch: boolean
     language: string
     theme: string
+    shortcutsEnabled: boolean
     globalShortcuts: ShortcutSettings
   }
   reminder: {
@@ -1167,6 +1168,11 @@ function ModeCard({
 // ========================================================
 function ShortcutsSection({ settings, onSave }: { settings: Settings; onSave: (s: Partial<Settings>) => void }) {
   const { general } = settings
+  const enabled = general.shortcutsEnabled ?? false
+
+  const toggleEnabled = (v: boolean) => {
+    onSave({ general: { ...general, shortcutsEnabled: v } })
+  }
 
   const updateShortcut = (key: string, value: string) => {
     onSave({ general: { ...general, globalShortcuts: { ...general.globalShortcuts, [key]: value } } })
@@ -1177,6 +1183,16 @@ function ShortcutsSection({ settings, onSave }: { settings: Settings; onSave: (s
       <h2 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mb-4">全局快捷键</h2>
 
       <Card>
+        <CardRow>
+          <div>
+            <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200">启用全局快捷键</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">开启后可通过快捷键控制护眼功能</p>
+          </div>
+          <AppleToggle checked={enabled} onChange={toggleEnabled} />
+        </CardRow>
+      </Card>
+
+      <Card className={enabled ? '' : 'opacity-50 pointer-events-none'}>
         <div className="px-4 pt-3.5 pb-2">
           <p className="text-[11px] text-gray-400 dark:text-gray-500">自定义全局快捷键（点击录制，留空可禁用）</p>
         </div>
@@ -1362,9 +1378,9 @@ function AboutSection() {
 // ========================================================
 
 /** 白色圆角卡片容器 */
-function Card({ children }: { children: React.ReactNode }) {
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="bg-white dark:bg-[#2a2a2a] rounded-xl shadow-sm overflow-hidden">
+    <div className={`bg-white dark:bg-[#2a2a2a] rounded-xl shadow-sm overflow-hidden ${className || ''}`}>
       {children}
     </div>
   )

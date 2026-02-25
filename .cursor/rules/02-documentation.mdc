@@ -261,12 +261,27 @@ docs/guides/新功能使用指南.md
 
 ## 现有文档清单
 
+### 架构文档 (docs/architecture/)
+- `BREAK_SYSTEM.md` - 休息系统架构文档（双级休息机制/模式选择/触发流程/暂停联动）
+
 ### 调研文档 (docs/research/)
 - `eye-care-app-research.md` - 护眼桌面应用技术调研（Electron/Tauri/竞品分析）
+- `office-health-research.md` - 办公健康功能调研
+- `rest-screen-and-settings-ui-research.md` - 休息屏幕与设置 UI 调研
+- `bilibili-video-integration-research.md` - B站视频集成调研
+- `water-reminder-research.md` - 喝水提醒功能调研
+- `stretch-video-sidebar-research.md` - 拉伸动作并排视频播放调研
 
 ### 需求文档 (docs/requirements/)
 - `v1.0.0-青眸护眼应用.md` - 青眸护眼应用 v1.0.0 完整需求文档
+- `v1.1.0-喝水提醒.md` - 喝水提醒功能需求文档
+- `v1.2.0-办公运动引导.md` - 办公运动引导需求文档
+- `v1.3.0-正念与专注.md` - 正念与专注需求文档
+- `v2.1.0-拉伸视频并排播放.md` - 拉伸视频并排播放需求文档
+
+### 使用指南 (docs/guides/)
+- `demo-验收指南.md` - 功能演示验收指南
 
 ---
 
-**最后更新**: 2026-02-13
+**最后更新**: 2026-02-25

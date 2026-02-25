@@ -29,6 +29,12 @@ export class ShortcutService {
     if (this.registered) this.unregister()
 
     const settings = settingsStore.getAll()
+
+    if (!settings.general.shortcutsEnabled) {
+      log.info('[ShortcutService] 全局快捷键已禁用，跳过注册')
+      return
+    }
+
     const shortcuts = settings.general.globalShortcuts
 
     try {

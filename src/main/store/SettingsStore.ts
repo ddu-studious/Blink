@@ -29,6 +29,11 @@ class SettingsStore {
       this.store.set('general.globalShortcuts', DEFAULT_SETTINGS.general.globalShortcuts)
       log.info('[SettingsStore] 迁移: 添加 globalShortcuts 默认值')
     }
+    // v1.4.0: 添加 shortcutsEnabled 字段（默认关闭）
+    if (general && general.shortcutsEnabled === undefined) {
+      this.store.set('general.shortcutsEnabled', DEFAULT_SETTINGS.general.shortcutsEnabled)
+      log.info('[SettingsStore] 迁移: 添加 shortcutsEnabled 默认值')
+    }
     // v1.0.0: 添加 workSchedule 字段
     const smart = this.store.get('smart')
     if (smart && !smart.workSchedule) {
