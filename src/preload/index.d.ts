@@ -17,6 +17,7 @@ interface QingMouAPI {
   break: {
     skip: () => Promise<TimerState>
     activityDetected: () => Promise<TimerState>
+    pageReady: () => Promise<void>
   }
   settings: {
     get: () => Promise<AppSettings>
@@ -39,6 +40,9 @@ interface QingMouAPI {
     getToday: () => Promise<ExerciseDailyStats>
     getRange: (startDate: string, endDate: string) => Promise<ExerciseDailyStats[]>
     getStreak: () => Promise<number>
+  }
+  window: {
+    openSettings: () => Promise<void>
   }
   workEnd: {
     postpone: () => Promise<{ success: boolean }>

@@ -7,13 +7,15 @@ interface DarkScreenModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
 }
 
 export default function DarkScreenMode({
   remaining,
   formatTime,
   showSkip,
-  onSkip
+  onSkip,
+  onOpenSettings
 }: DarkScreenModeProps) {
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -36,6 +38,15 @@ export default function DarkScreenMode({
             className="px-5 py-1.5 text-[11px] text-white/[0.06] hover:text-white/20 border border-white/[0.03] hover:border-white/10 rounded-full transition-all duration-500"
           >
             跳过
+          </button>
+        )}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="px-3 py-1.5 text-[11px] text-white/[0.04] hover:text-white/15 border border-white/[0.02] hover:border-white/[0.08] rounded-full transition-all duration-500"
+            title="设置"
+          >
+            ⚙️
           </button>
         )}
       </div>

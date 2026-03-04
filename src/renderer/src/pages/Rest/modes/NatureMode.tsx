@@ -10,6 +10,7 @@ interface NatureModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
   waterOverlay?: React.ReactNode
 }
 
@@ -33,7 +34,7 @@ function getImagePath(filename: string): string {
   ).href
 }
 
-export default function NatureMode({ remaining, formatTime, showSkip, onSkip, waterOverlay }: NatureModeProps) {
+export default function NatureMode({ remaining, formatTime, showSkip, onSkip, onOpenSettings, waterOverlay }: NatureModeProps) {
   const [bottomIndex, setBottomIndex] = useState(0)
   const [topIndex, setTopIndex] = useState(1)
   const [showTop, setShowTop] = useState(false)
@@ -158,17 +159,26 @@ export default function NatureMode({ remaining, formatTime, showSkip, onSkip, wa
         </div>
       </div>
 
-      {/* 跳过按钮 */}
-      {showSkip && (
-        <div className="absolute top-6 right-6 z-20">
+      {/* 操作按钮 */}
+      <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
+        {showSkip && (
           <button
             onClick={onSkip}
             className="px-4 py-1.5 text-xs text-white/30 hover:text-white/60 bg-black/20 backdrop-blur-sm border border-white/10 hover:border-white/25 rounded-full transition-all"
           >
             跳过
           </button>
-        </div>
-      )}
+        )}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="px-3 py-1.5 text-xs text-white/20 hover:text-white/50 bg-black/20 backdrop-blur-sm border border-white/10 hover:border-white/25 rounded-full transition-all"
+            title="设置"
+          >
+            ⚙️
+          </button>
+        )}
+      </div>
     </div>
   )
 }

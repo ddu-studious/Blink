@@ -12,6 +12,7 @@ interface MindfulModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
   waterOverlay: ReactNode
   healthTipCategories?: string[]
 }
@@ -21,6 +22,7 @@ export default function MindfulMode({
   formatTime,
   showSkip,
   onSkip,
+  onOpenSettings,
   waterOverlay,
   healthTipCategories
 }: MindfulModeProps) {
@@ -197,6 +199,15 @@ export default function MindfulMode({
               className="px-5 py-1.5 text-xs text-white/20 hover:text-white/50 border border-white/5 hover:border-white/15 rounded-full transition-all"
             >
               跳过
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 text-xs text-white/15 hover:text-white/40 border border-white/5 hover:border-white/15 rounded-full transition-all"
+              title="设置"
+            >
+              ⚙️
             </button>
           )}
         </div>

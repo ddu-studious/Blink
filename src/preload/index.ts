@@ -30,7 +30,8 @@ const qingmouAPI = {
   // ---- 休息 ----
   break: {
     skip: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_SKIP),
-    activityDetected: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_ACTIVITY_DETECTED)
+    activityDetected: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_ACTIVITY_DETECTED),
+    pageReady: () => ipcRenderer.invoke(IPC_CHANNELS.BREAK_PAGE_READY)
   },
 
   // ---- 设置 ----
@@ -66,6 +67,11 @@ const qingmouAPI = {
     getRange: (startDate: string, endDate: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_GET_RANGE, { startDate, endDate }),
     getStreak: () => ipcRenderer.invoke(IPC_CHANNELS.EXERCISE_GET_STREAK)
+  },
+
+  // ---- 窗口 ----
+  window: {
+    openSettings: () => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_OPEN_SETTINGS)
   },
 
   // ---- 下班提醒 ----

@@ -131,7 +131,10 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
     return tips[Math.floor(Math.random() * tips.length)]
   })
 
-  // 加载设置 & 喝水数据
+  // 挂载后立即通知主进程页面已就绪（减少休息页卡顿感），设置与喝水数据异步加载
+  useEffect(() => {
+    window.api.break.pageReady()
+  }, [])
   useEffect(() => {
     window.api.settings.get().then((s: AppSettings) => setSettings(s))
     window.api.water.getToday().then((w: WaterTodayStats) => setWaterStats(w))
@@ -218,6 +221,11 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
     window.api.break.skip()
   }, [])
 
+  // 打开设置
+  const handleOpenSettings = useCallback(() => {
+    window.api.window.openSettings()
+  }, [])
+
   // 格式化时间
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)
@@ -293,6 +301,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
             waterOverlay={waterOverlay}
           />
         )
@@ -303,6 +312,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
           />
         )
       case 'eyeTraining':
@@ -312,6 +322,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
           />
         )
       case 'darkScreen':
@@ -321,6 +332,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
           />
         )
       case 'stretch':
@@ -330,6 +342,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
             waterOverlay={waterOverlay}
           />
         )
@@ -340,6 +353,7 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
             formatTime={formatTime}
             showSkip={showSkip}
             onSkip={handleSkip}
+            onOpenSettings={handleOpenSettings}
             waterOverlay={waterOverlay}
             healthTipCategories={settings?.mindfulness?.healthTips?.categories}
           />
@@ -489,15 +503,24 @@ export default function RestPage({ breakType, duration, isPrimary, forceMode }: 
               </div>
             )}
 
-            {/* 跳过按钮 */}
-            {showSkip && (
+            {/* 操作按钮 */}
+            <div className="mt-4 flex items-center gap-3">
+              {showSkip && (
+                <button
+                  onClick={handleSkip}
+                  className="px-6 py-2 text-sm text-white/40 hover:text-white/80 border border-white/10 hover:border-white/30 rounded-full transition-all duration-300 animate-fade-in"
+                >
+                  跳过
+                </button>
+              )}
               <button
-                onClick={handleSkip}
-                className="mt-4 px-6 py-2 text-sm text-white/40 hover:text-white/80 border border-white/10 hover:border-white/30 rounded-full transition-all duration-300 animate-fade-in"
+                onClick={handleOpenSettings}
+                className="px-4 py-2 text-sm text-white/25 hover:text-white/60 border border-white/5 hover:border-white/20 rounded-full transition-all duration-300"
+                title="设置"
               >
-                跳过
+                ⚙️
               </button>
-            )}
+            </div>
           </div>
         )}
       </div>

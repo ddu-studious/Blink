@@ -10,6 +10,7 @@ interface EyeTrainingModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
 }
 
 type TrainingType = 'figure8' | 'clock' | 'focusChange' | 'palming'
@@ -25,7 +26,8 @@ export default function EyeTrainingMode({
   remaining,
   formatTime,
   showSkip,
-  onSkip
+  onSkip,
+  onOpenSettings
 }: EyeTrainingModeProps) {
   const [activeTraining, setActiveTraining] = useState<TrainingType>('figure8')
   const [groupIndex, setGroupIndex] = useState(0)
@@ -113,6 +115,15 @@ export default function EyeTrainingMode({
               className="px-4 py-1.5 text-xs text-white/20 hover:text-white/50 border border-white/5 hover:border-white/15 rounded-full transition-all"
             >
               退出训练
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 text-xs text-white/15 hover:text-white/40 border border-white/5 hover:border-white/15 rounded-full transition-all"
+              title="设置"
+            >
+              ⚙️
             </button>
           )}
         </div>

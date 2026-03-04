@@ -54,6 +54,13 @@ export class TimerManager extends EventEmitter {
     }
   }
 
+  /** 跨天时重新加载今日统计（公开方法，供日期变更检测调用） */
+  reloadTodayStats(): void {
+    this.loadTodayStats()
+    this.emitState()
+    log.info('[TimerManager] 已重新加载今日统计数据')
+  }
+
   /** 获取当前设置 */
   private getSettings(): AppSettings {
     return settingsStore.getAll()
@@ -254,6 +261,12 @@ export class TimerManager extends EventEmitter {
 
   /** 休息时间心跳 */
   private tickBreak(): void {
+    // 页面未就绪时不递减倒计时，只广播状态
+    if (this.breakPendingReady) {
+      this.emitState()
+      return
+    }
+
     this.breakCountdown--
 
     if (this.breakCountdown <= 0) {
@@ -264,6 +277,9 @@ export class TimerManager extends EventEmitter {
     // 休息中每秒广播状态 (显示倒计时)
     this.emitState()
   }
+
+  // 延迟倒计时：页面就绪前暂停 break 计时
+  private breakPendingReady = false
 
   /** 开始休息 */
   startBreak(type: BreakType, forceMode?: RestScreenMode): void {
@@ -277,11 +293,21 @@ export class TimerManager extends EventEmitter {
     this.currentBreakType = type
     this.breakCountdown = duration
     this.breakStartTime = dayjs().toISOString()
+    this.breakPendingReady = true
 
-    log.info(`[TimerManager] 开始 ${type} 休息，时长 ${duration} 秒${forceMode ? `，强制模式: ${forceMode}` : ''}`)
+    log.info(`[TimerManager] 开始 ${type} 休息，时长 ${duration} 秒${forceMode ? `，强制模式: ${forceMode}` : ''}，等待页面就绪`)
 
     this.emit('break-start', { type, duration, forceMode })
     this.emitState()
+  }
+
+  /** 页面就绪后真正开始休息倒计时 */
+  onBreakPageReady(): void {
+    if (this.breakPendingReady) {
+      this.breakPendingReady = false
+      log.info(`[TimerManager] 页面就绪，开始 ${this.currentBreakType} 休息倒计时`)
+      this.emitState()
+    }
   }
 
   /** 完成休息 */

@@ -182,6 +182,7 @@ export const IPC_CHANNELS = {
   // 休息
   BREAK_SKIP: 'break:skip',
   BREAK_COMPLETE: 'break:complete',
+  BREAK_PAGE_READY: 'break:page-ready',
 
   // 设置
   SETTINGS_GET: 'settings:get',
@@ -209,6 +210,9 @@ export const IPC_CHANNELS = {
   WORK_END_CHECK: 'workEnd:check',
   WORK_END_POSTPONE: 'workEnd:postpone',
   WORK_END_DISMISS: 'workEnd:dismiss',
+
+  // 窗口
+  WINDOW_OPEN_SETTINGS: 'window:open-settings',
 
   // 应用
   APP_QUIT: 'app:quit',

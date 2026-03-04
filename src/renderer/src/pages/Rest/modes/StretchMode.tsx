@@ -17,6 +17,7 @@ interface StretchModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
   waterOverlay?: React.ReactNode
 }
 
@@ -29,7 +30,7 @@ function getImagePath(filename: string): string {
 
 const BG_IMAGES = ['forest.jpg', 'meadow.jpg', 'lake.jpg']
 
-export default function StretchMode({ remaining, formatTime, showSkip, onSkip, waterOverlay }: StretchModeProps) {
+export default function StretchMode({ remaining, formatTime, showSkip, onSkip, onOpenSettings, waterOverlay }: StretchModeProps) {
   const [currentStretch, setCurrentStretch] = useState<StretchAction>(() => getRandomStretch())
   const [activeStepIndex, setActiveStepIndex] = useState(0)
   const [stepTimeLeft, setStepTimeLeft] = useState(0)
@@ -39,6 +40,7 @@ export default function StretchMode({ remaining, formatTime, showSkip, onSkip, w
   const [selectedVideoPlatform, setSelectedVideoPlatform] = useState<'bilibili' | 'youtube'>('bilibili')
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [videoRetryCount, setVideoRetryCount] = useState(0)
   const hasRecorded = useRef(false)
   const autoSwitchTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -188,6 +190,15 @@ export default function StretchMode({ remaining, formatTime, showSkip, onSkip, w
                 跳过
               </button>
             )}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="px-3 py-2 text-sm text-white/25 hover:text-white/60 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 rounded-lg transition-all"
+                title="设置"
+              >
+                ⚙️
+              </button>
+            )}
           </div>
         </div>
 
@@ -197,8 +208,8 @@ export default function StretchMode({ remaining, formatTime, showSkip, onSkip, w
           {hasVideo && (
             <div className="w-[55%] flex flex-col min-h-0">
               <div className="flex-1 relative rounded-2xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
-                {/* 视频加载骨架屏 */}
-                {!videoLoaded && (
+                {/* 视频加载骨架屏 / 失败重试 */}
+                {!videoLoaded && !videoError && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-10 h-10 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
@@ -206,8 +217,24 @@ export default function StretchMode({ remaining, formatTime, showSkip, onSkip, w
                     </div>
                   </div>
                 )}
+                {videoError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 z-10">
+                    <span className="text-sm text-white/60">视频加载失败或需要刷新</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoError(false)
+                        setVideoLoaded(false)
+                        setVideoRetryCount((c) => c + 1)
+                      }}
+                      className="px-4 py-2 text-sm text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all"
+                    >
+                      重试加载
+                    </button>
+                  </div>
+                )}
                 <iframe
-                  key={`${activeVideo!.platform}-${activeVideo!.id}-${videoMuted}`}
+                  key={`${activeVideo!.platform}-${activeVideo!.id}-${videoMuted}-${videoRetryCount}`}
                   src={videoSrc}
                   className="w-full h-full"
                   allowFullScreen

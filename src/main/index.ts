@@ -2,7 +2,7 @@
 // 青眸 (QingMou) - 主进程入口
 // ========================================
 
-import { app, BrowserWindow, Notification, dialog, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, dialog, nativeImage } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { join } from 'path'
 import log from 'electron-log'
@@ -19,6 +19,7 @@ import { SedentaryDetector } from './monitor/SedentaryDetector'
 import { WorkEndReminder } from './monitor/WorkEndReminder'
 import { WaterReminder } from './monitor/WaterReminder'
 import { StandReminder } from './monitor/StandReminder'
+import { PauseReminder } from './monitor/PauseReminder'
 import { settingsStore } from './store/SettingsStore'
 import { statsDatabase } from './store/StatsDatabase'
 import { registerIpcHandlers, broadcastTimerState, setWaterRecordCallback, setWorkEndReminder, setWaterReminder } from './ipc/ipcHandlers'
@@ -26,7 +27,8 @@ import { autoLaunchService } from './services/AutoLaunchService'
 import { soundService } from './services/SoundService'
 import { shortcutService } from './services/ShortcutService'
 import { themeService } from './services/ThemeService'
-import { BreakType, RestScreenMode, TimerState } from './types'
+import { BreakType, IPC_CHANNELS, RestScreenMode, TimerState } from './types'
+import dayjs from 'dayjs'
 
 // ---- 日志配置 ----
 log.transports.file.level = 'info'
@@ -45,23 +47,17 @@ let sedentaryDetector: SedentaryDetector
 let workEndReminder: WorkEndReminder
 let waterReminder: WaterReminder
 let standReminder: StandReminder
+let pauseReminder: PauseReminder
 let timerWatchdog: NodeJS.Timeout | null = null
+let dateCheckInterval: NodeJS.Timeout | null = null
+let lastCheckedDate: string = dayjs().format('YYYY-MM-DD')
 
-/** 初始化所有模块 */
-function initModules(): void {
-  // 1. 初始化数据库
+/** 第一阶段：仅创建托盘相关（让菜单栏尽快出现） */
+function initTrayFirst(): void {
   statsDatabase.init()
-
-  // 2. 初始化计时器
   timerManager = new TimerManager()
-
-  // 3. 初始化覆盖窗口管理器
   overlayManager = new OverlayManager()
-
-  // 4. 初始化普通窗口管理器
   windowManager = new WindowManager()
-
-  // 5. 初始化系统托盘
   trayManager = new TrayManager({
     onStart: () => timerManager.start(),
     onPause: () => timerManager.pause(),
@@ -120,41 +116,28 @@ function initModules(): void {
     }
   })
   trayManager.init()
+  log.info('[Main] 托盘已显示，后台继续初始化...')
+}
 
-  // 6. 初始化电源监控
+/** 第二阶段：监控、IPC 等（延迟执行，避免阻塞首帧） */
+function initModulesDeferred(): void {
   powerMonitorService = new PowerMonitorService()
   powerMonitorService.init()
-
-  // 7. 初始化空闲检测
   idleDetector = new IdleDetector()
-
-  // 8. 初始化免打扰检测
   dndDetector = new DndDetector()
-
-  // 8.5 初始化全屏应用检测
   fullscreenDetector = new FullscreenDetector()
-
-  // 8.6 初始化久坐检测
   sedentaryDetector = new SedentaryDetector()
-
-  // 8.7 初始化下班提醒
   workEndReminder = new WorkEndReminder()
-
-  // 8.8 初始化独立喝水提醒
   waterReminder = new WaterReminder()
-
-  // 8.9 初始化站立提醒
   standReminder = new StandReminder()
-
-  // 9. 初始化主题服务
+  pauseReminder = new PauseReminder()
   themeService.init()
-
-  // 10. 注册 IPC 处理器
   registerIpcHandlers(timerManager)
   setWorkEndReminder(workEndReminder)
   setWaterReminder(waterReminder)
-
-  // 11. 注册全局快捷键（register 内部会检查 shortcutsEnabled 开关）
+  ipcMain.handle(IPC_CHANNELS.WINDOW_OPEN_SETTINGS, () => {
+    windowManager.showSettings()
+  })
   shortcutService.register({
     onTogglePause: () => {
       const state = timerManager.getState()
@@ -187,12 +170,19 @@ function initModules(): void {
         standReminder?.stop()
         sedentaryDetector?.stop()
         workEndReminder?.stop()
+        // 仅用户手动暂停时启动暂停提醒
+        if (timerManager.isManuallyPaused()) {
+          pauseReminder?.onPaused()
+        }
         log.info('[Main] 护眼已暂停，独立提醒模块已同步暂停')
       } else if (state.status === 'running' && prevTimerStatus === 'paused') {
         waterReminder?.start()
         standReminder?.start()
         sedentaryDetector?.start()
         workEndReminder?.start()
+        pauseReminder?.onResumed()
+        // 恢复时检测是否跨天，刷新当日数据
+        handleDateChangeCheck()
         log.info('[Main] 护眼已恢复，独立提醒模块已同步恢复')
       }
       prevTimerStatus = state.status
@@ -216,7 +206,12 @@ function initModules(): void {
     const settings = settingsStore.getAll()
 
     if (settings.reminder.notificationMode === 'overlay' || settings.reminder.notificationMode === 'both') {
-      overlayManager.show(type, duration, forceMode)
+      overlayManager.show(type, duration, forceMode, () => {
+        timerManager.onBreakPageReady()
+      })
+    } else {
+      // 非 overlay 模式，直接开始倒计时
+      timerManager.onBreakPageReady()
     }
 
     if (settings.reminder.notificationMode === 'notification' || settings.reminder.notificationMode === 'both') {
@@ -310,6 +305,12 @@ function initModules(): void {
     timerManager.takeBreakNow('long', 'stretch')
   })
 
+  // 暂停护眼提醒 → 用户点击通知恢复护眼
+  pauseReminder.on('resume-requested', () => {
+    log.info('[Main] 用户通过暂停提醒通知恢复护眼')
+    timerManager.resume()
+  })
+
   // 站立通知按钮 "已站立" → 记录运动 + 重置计时
   standReminder.on('stand-confirmed', () => {
     const now = new Date().toISOString()
@@ -329,6 +330,20 @@ function initModules(): void {
   setWaterRecordCallback(refreshWaterProgress)
 
   log.info('[Main] 所有模块初始化完成')
+}
+
+/** 检测日期变更，跨天时自动刷新所有当日数据 */
+function handleDateChangeCheck(): void {
+  const today = dayjs().format('YYYY-MM-DD')
+  if (today !== lastCheckedDate) {
+    log.info(`[Main] 检测到日期变更: ${lastCheckedDate} → ${today}，刷新当日数据`)
+    lastCheckedDate = today
+
+    refreshWaterProgress()
+    timerManager?.reloadTodayStats()
+
+    log.info('[Main] 跨天数据刷新完成')
+  }
 }
 
 /** 刷新托盘喝水进度 */
@@ -361,6 +376,10 @@ function cleanup(): void {
     clearInterval(timerWatchdog)
     timerWatchdog = null
   }
+  if (dateCheckInterval) {
+    clearInterval(dateCheckInterval)
+    dateCheckInterval = null
+  }
   timerManager?.destroy()
   trayManager?.destroy()
   overlayManager?.destroy()
@@ -373,6 +392,7 @@ function cleanup(): void {
   workEndReminder?.destroy()
   waterReminder?.destroy()
   standReminder?.destroy()
+  pauseReminder?.destroy()
   shortcutService?.destroy()
   statsDatabase?.close()
   log.info('[Main] 资源清理完成')
@@ -404,51 +424,33 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // 初始化所有模块
-  initModules()
+  // 先显示托盘（菜单栏尽快出现），其余初始化放到下一帧
+  initTrayFirst()
+  setImmediate(async () => {
+    initModulesDeferred()
+    idleDetector.start()
+    dndDetector.start()
+    fullscreenDetector.start()
+    sedentaryDetector.start()
+    workEndReminder.start()
+    waterReminder.start()
+    standReminder.start()
+    await initAutoLaunch()
+    const settings = settingsStore.getAll()
+    if (settings.firstRun) {
+      windowManager.showSettings()
+      settingsStore.markFirstRunDone()
+    }
+    timerManager.start()
+    timerWatchdog = setInterval(() => {
+      timerManager.ensureRunning()
+    }, 60000)
+    dateCheckInterval = setInterval(() => {
+      handleDateChangeCheck()
+    }, 60000)
+    log.info('[Main] 青眸已启动')
+  })
 
-  // 启动空闲检测
-  idleDetector.start()
-
-  // 启动免打扰检测
-  dndDetector.start()
-
-  // 启动全屏应用检测
-  fullscreenDetector.start()
-
-  // 启动久坐检测
-  sedentaryDetector.start()
-
-  // 启动下班提醒
-  workEndReminder.start()
-
-  // 启动独立喝水提醒
-  waterReminder.start()
-
-  // 启动站立提醒
-  standReminder.start()
-
-  // 初始化开机自启动
-  await initAutoLaunch()
-
-  // 首次运行：打开设置窗口引导用户
-  const settings = settingsStore.getAll()
-  if (settings.firstRun) {
-    windowManager.showSettings()
-    settingsStore.markFirstRunDone()
-  }
-
-  // 自动开始计时
-  timerManager.start()
-
-  // 启动计时器保活 watchdog（每 60 秒检查一次）
-  timerWatchdog = setInterval(() => {
-    timerManager.ensureRunning()
-  }, 60000)
-
-  log.info('[Main] 青眸已启动')
-
-  // macOS: 点击 Dock 图标重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       windowManager.showSettings()

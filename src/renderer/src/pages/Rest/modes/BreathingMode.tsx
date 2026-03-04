@@ -10,6 +10,7 @@ interface BreathingModeProps {
   formatTime: (s: number) => string
   showSkip: boolean
   onSkip: () => void
+  onOpenSettings?: () => void
 }
 
 type BreathPhase = 'inhale' | 'hold' | 'exhale'
@@ -26,7 +27,8 @@ export default function BreathingMode({
   remaining,
   formatTime,
   showSkip,
-  onSkip
+  onSkip,
+  onOpenSettings
 }: BreathingModeProps) {
   const [phase, setPhase] = useState<BreathPhase>('inhale')
   const [phaseLabel, setPhaseLabel] = useState('吸气...')
@@ -163,6 +165,15 @@ export default function BreathingMode({
               className="px-5 py-1.5 text-xs text-white/20 hover:text-white/50 border border-white/5 hover:border-white/15 rounded-full transition-all"
             >
               跳过
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 text-xs text-white/15 hover:text-white/40 border border-white/5 hover:border-white/15 rounded-full transition-all"
+              title="设置"
+            >
+              ⚙️
             </button>
           )}
         </div>
